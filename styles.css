@@ -218,6 +218,7 @@ body {
   width: 100%; background: var(--surface); color: var(--primary);
   border: 1.5px solid var(--primary-soft); border-radius: 14px;
   padding: 13px; font-weight: 700; cursor: pointer; margin-top: 10px;
+  font-size: 1rem; font-family: inherit; line-height: 1.2;
 }
 .btn-danger { color: #d64545; border-color: #f7d7d7; }
 
@@ -341,6 +342,5 @@ body {
 }
 
 .backup-row { display: flex; gap: 10px; margin-top: 22px; }
-.backup-row .btn-ghost { margin-top: 0; }
-.backup-label { display: grid; place-items: center; cursor: pointer; }
+.backup-row .btn-ghost { flex: 1; margin-top: 0; display: flex; align-items: center; justify-content: center; gap: 6px; }
 .backup-hint { text-align: center; margin-top: 8px; font-size: 0.8rem; }
