@@ -11,7 +11,7 @@ const LS = {
 };
 
 const state = {
-  lang: localStorage.getItem(LS.lang) || "bg",
+  lang: I18N[load(LS.lang, "bg")] ? load(LS.lang, "bg") : "bg",
   program: load(LS.program, null) || clone(DEFAULT_PROGRAM),
   sessions: load(LS.sessions, []),        // [{date:"YYYY-MM-DD", dayId, dayName:{bg,en}, icon, exercises:[{name,setsDone,sets}]}]
   active: load(LS.active, null),          // {dayId, started, sets:{exId:count}, done:{exId:bool}}
@@ -33,7 +33,7 @@ function load(key, fallback) {
   catch { return fallback; }
 }
 function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
-function t() { return I18N[state.lang]; }
+function t() { return I18N[state.lang] || I18N.bg; }
 function L(obj) {
   // Resolve a bilingual field (string or {bg,en}).
   if (obj == null) return "";
