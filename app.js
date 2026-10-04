@@ -668,7 +668,16 @@ document.querySelectorAll(".tab").forEach((b) =>
 
 // Register service worker for offline / installable PWA.
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+  // Reload once when a new service worker takes control, so updated files load immediately.
+  let swReloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (swReloaded) return;
+    swReloaded = true;
+    location.reload();
+  });
+  window.addEventListener("load", () =>
+    navigator.serviceWorker.register("sw.js").then((reg) => reg.update()).catch(() => {})
+  );
 }
 
 render();
