@@ -220,7 +220,6 @@ const DEFAULT_PROGRAM = {
         {
           id: "l1e3",
           muscle: "glutes",
-          exdb: "Barbell_Hip_Thrust",
           name: { bg: "Глутеус мост на пейка", en: "Bench Hip Thrust" },
           sets: 4,
           reps: "12–15",
@@ -530,7 +529,6 @@ const DEFAULT_PROGRAM = {
         {
           id: "l2e4",
           muscle: "hamstrings",
-          exdb: "Lying_Leg_Curls",
           name: { bg: "Сгъване за задно бедро от лег", en: "Lying Leg Curl" },
           sets: 3,
           reps: "12–15",
