@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#ff6b4a" />
+  <title>Моята тренировка</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <h1 class="app-title" id="appTitle">🏋️ Моята тренировка</h1>
+      <button class="lang-toggle" id="langToggle" aria-label="Language">BG</button>
+    </div>
+  </header>
+
+  <main id="view" class="view"></main>
+
+  <nav class="tabbar">
+    <button class="tab active" id="tabWorkouts" data-tab="workouts">
+      <span class="tab-icon">💪</span>
+      <span class="tab-label" data-i18n="tabWorkouts">Тренировки</span>
+    </button>
+    <button class="tab" id="tabCalendar" data-tab="calendar">
+      <span class="tab-icon">📅</span>
+      <span class="tab-label" data-i18n="tabCalendar">Календар</span>
+    </button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="data.js"></script>
+  <script src="i18n.js"></script>
+  <script src="muscles.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
