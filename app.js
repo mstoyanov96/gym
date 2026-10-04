@@ -165,11 +165,7 @@ function importData(file) {
 
 
 function openDay(dayId) {
-  // Start or resume an active session for this day.
-  if (!state.active || state.active.dayId !== dayId) {
-    state.active = { dayId, started: todayStr(), sets: {}, done: {} };
-    save(LS.active, state.active);
-  }
+  // Just open the plan. The session starts only when the user taps Start.
   state.view = { screen: "detail", dayId, editing: false };
   render();
 }
@@ -178,7 +174,9 @@ function openDay(dayId) {
 function renderDetail() {
   const day = getDay(state.view.dayId);
   if (!day) { state.view.screen = "list"; return render(); }
-  const active = state.active;
+  const isActiveDay = state.active && state.active.dayId === day.id;
+  const active = isActiveDay ? state.active : null;
+  const started = !!active;
   const editing = state.view.editing;
 
   const totalSets = day.exercises.reduce((a, e) => a + Number(e.sets || 0), 0);
@@ -194,7 +192,7 @@ function renderDetail() {
     <div class="detail-focus">${L(day.focus)}</div>
   `;
 
-  if (!editing) {
+  if (!editing && started) {
     html += `
       <div class="progress-wrap">
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
@@ -202,10 +200,18 @@ function renderDetail() {
       </div>`;
   }
 
-  html += day.exercises.map((e) => editing ? exerciseEditCard(e) : exerciseTrackCard(e, active)).join("");
+  if (editing) {
+    html += day.exercises.map((e) => exerciseEditCard(e)).join("");
+  } else {
+    html += `<div class="ex-list ${started ? "" : "preview"}">`;
+    html += day.exercises.map((e) => exerciseTrackCard(e, active)).join("");
+    html += `</div>`;
+  }
 
   if (editing) {
     html += `<button class="add-ex-btn" id="btnAddEx">+ ${t().addExercise}</button>`;
+  } else if (!started) {
+    html += `<button class="btn-primary" id="btnStart">▶ ${t().start}</button>`;
   } else {
     html += `
       <button class="btn-primary" id="btnFinish">${t().finish}</button>
@@ -213,7 +219,7 @@ function renderDetail() {
   }
 
   viewEl.innerHTML = html;
-  wireDetail(day);
+  wireDetail(day, started);
 }
 
 function exerciseTrackCard(e, active) {
@@ -289,13 +295,18 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function wireDetail(day) {
+function wireDetail(day, started) {
   document.getElementById("btnBack").onclick = () => { state.view.screen = "list"; render(); };
   document.getElementById("btnEdit").onclick = () => {
     if (state.view.editing) collectEdits(day);
     state.view.editing = !state.view.editing;
     render();
   };
+
+  // Exercise info is available whether or not the workout is started.
+  viewEl.querySelectorAll("[data-info]").forEach((el) =>
+    el.onclick = () => openExerciseInfo(getEx(day, el.dataset.info))
+  );
 
   if (state.view.editing) {
     document.getElementById("btnAddEx").onclick = () => {
@@ -322,6 +333,16 @@ function wireDetail(day) {
     return;
   }
 
+  // Not started yet: only wire the Start button.
+  if (!started) {
+    document.getElementById("btnStart").onclick = () => {
+      state.active = { dayId: day.id, started: todayStr(), sets: {}, done: {} };
+      save(LS.active, state.active);
+      render();
+    };
+    return;
+  }
+
   // Tracking interactions
   viewEl.querySelectorAll(".set-dot").forEach((dot) =>
     dot.onclick = () => {
@@ -344,9 +365,6 @@ function wireDetail(day) {
       save(LS.active, state.active);
       render();
     }
-  );
-  viewEl.querySelectorAll("[data-info]").forEach((el) =>
-    el.onclick = () => openExerciseInfo(getEx(day, el.dataset.info))
   );
 
   document.getElementById("btnFinish").onclick = () => finishWorkout(day);

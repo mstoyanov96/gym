@@ -343,4 +343,6 @@ body {
 
 .backup-row { display: flex; gap: 10px; margin-top: 22px; }
 .backup-row .btn-ghost { flex: 1; min-width: 0; margin-top: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 10px; font-size: 0.92rem; white-space: nowrap; }
+.ex-list.preview .set-dot { opacity: 0.4; pointer-events: none; }
+.ex-list.preview .ex-check { opacity: 0.3; pointer-events: none; }
 .backup-hint { text-align: center; margin-top: 8px; font-size: 0.8rem; }
