@@ -12,7 +12,7 @@ const LS = {
 
 const state = {
   lang: localStorage.getItem(LS.lang) || "bg",
-  program: load(LS.program, null) || structuredClone(DEFAULT_PROGRAM),
+  program: load(LS.program, null) || clone(DEFAULT_PROGRAM),
   sessions: load(LS.sessions, []),        // [{date:"YYYY-MM-DD", dayId, dayName:{bg,en}, icon, exercises:[{name,setsDone,sets}]}]
   active: load(LS.active, null),          // {dayId, started, sets:{exId:count}, done:{exId:bool}}
   tab: "workouts",
@@ -22,10 +22,12 @@ const state = {
 
 // Migrate program if a newer default version ships.
 if (!state.program.version || state.program.version < DEFAULT_PROGRAM.version) {
-  state.program = structuredClone(DEFAULT_PROGRAM);
+  state.program = clone(DEFAULT_PROGRAM);
   save(LS.program, state.program);
 }
 
+// Deep clone of plain JSON data (works on all browsers, unlike structuredClone).
+function clone(x) { return JSON.parse(JSON.stringify(x)); }
 function load(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
   catch { return fallback; }
@@ -567,7 +569,7 @@ function openDayLog(date, list) {
 
 let sessEdit = null;
 function openSessionEdit(date, idx) {
-  sessEdit = { date, idx, data: structuredClone(state.sessions[idx]) };
+  sessEdit = { date, idx, data: clone(state.sessions[idx]) };
   renderSessionEdit();
 }
 function renderSessionEdit() {
