@@ -185,6 +185,7 @@ function importData(file) {
 function openDay(dayId) {
   // Just open the plan. The session starts only when the user taps Start.
   state.view = { screen: "detail", dayId, editing: false };
+  history.pushState({ layer: "detail" }, "");
   render();
 }
 
@@ -441,7 +442,7 @@ function escapeHtml(s) {
 }
 
 function wireDetail(day, started) {
-  document.getElementById("btnBack").onclick = () => { state.view.screen = "list"; render(); };
+  document.getElementById("btnBack").onclick = () => history.back();
   document.getElementById("btnEdit").onclick = () => {
     if (state.view.editing) collectEdits(day);
     state.view.editing = !state.view.editing;
@@ -877,7 +878,7 @@ function ensureBackdrop() {
 function openModal(html) {
   ensureBackdrop();
   document.getElementById("modalBox").innerHTML = html;
-  modalOpen = true;
+  if (!modalOpen) { modalOpen = true; history.pushState({ layer: "modal" }, ""); }
   backdrop.classList.add("open");
   const close = document.getElementById("modalClose");
   if (close) close.onclick = closeModal;
@@ -905,27 +906,17 @@ document.querySelectorAll(".tab").forEach((b) =>
 
 // ============================================================
 //  BACK-BUTTON / SWIPE-BACK NAVIGATION
-//  Keep one sentinel history entry so the first Back press (or iOS edge
-//  swipe) closes the open layer instead of leaving the app. After each
-//  close we re-arm the sentinel; at the base list we let the app exit.
+//  Each deeper view (opening a workout = detail, opening a modal) pushes a
+//  history entry when it opens, so the device Back button / iOS edge-swipe
+//  pops exactly one layer. At the base list, Back exits the app.
 // ============================================================
-function navArm() { history.pushState({ app: true }, ""); }
-
-function closeTopLayer() {
-  if (modalOpen) { hideModal(); return true; }
-  if (state.tab === "workouts" && state.view.screen === "detail") {
-    state.view.screen = "list"; render(); return true;
-  }
-  if (state.tab === "calendar") {
-    state.tab = "workouts"; state.view.screen = "list"; render(); return true;
-  }
-  return false; // at the base list — allow the app to exit
-}
-
 window.addEventListener("popstate", () => {
-  if (closeTopLayer()) navArm();
+  if (modalOpen) { hideModal(); return; }
+  if (state.tab === "workouts" && state.view.screen === "detail") {
+    state.view.screen = "list";
+    render();
+  }
 });
-navArm();
 
 // ============================================================
 //  SERVICE WORKER + UPDATE PROMPT
