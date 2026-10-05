@@ -20,9 +20,9 @@ const state = {
   calMonth: new Date().getFullYear() * 12 + new Date().getMonth(),
 };
 
-// Migrate program if a newer default version ships.
-if (!state.program.version || state.program.version < DEFAULT_PROGRAM.version) {
-  state.program = clone(DEFAULT_PROGRAM);
+// Seed the default program on first run only. Never overwrite a stored program,
+// so app updates (even with a newer default) can't wipe the user's edits.
+if (!localStorage.getItem(LS.program)) {
   save(LS.program, state.program);
 }
 
