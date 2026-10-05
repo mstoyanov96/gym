@@ -26,6 +26,22 @@ if (!state.program.version || state.program.version < DEFAULT_PROGRAM.version) {
   save(LS.program, state.program);
 }
 
+// Migrate an in-progress session from the old set-counter model to per-set logs.
+if (state.active && !state.active.log) {
+  const d = state.program.days.find((x) => x.id === state.active.dayId);
+  if (d) {
+    const log = {};
+    d.exercises.forEach((e) => {
+      const cnt = (state.active.sets && state.active.sets[e.id]) || 0;
+      log[e.id] = Array.from({ length: Number(e.sets) || 0 }, (_, i) => ({ weight: "", reps: "", done: i < cnt }));
+    });
+    state.active = { dayId: state.active.dayId, started: state.active.started, log };
+    save(LS.active, state.active);
+  } else {
+    state.active = null; localStorage.removeItem(LS.active);
+  }
+}
+
 // Deep clone of plain JSON data (works on all browsers, unlike structuredClone).
 function clone(x) { return JSON.parse(JSON.stringify(x)); }
 function load(key, fallback) {
@@ -182,7 +198,7 @@ function renderDetail() {
   const editing = state.view.editing;
 
   const totalSets = day.exercises.reduce((a, e) => a + Number(e.sets || 0), 0);
-  const doneSets = day.exercises.reduce((a, e) => a + Math.min(active?.sets?.[e.id] || 0, e.sets), 0);
+  const doneSets = day.exercises.reduce((a, e) => a + Math.min(doneCountFor(active, e), e.sets), 0);
   const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
 
   let html = `
@@ -212,6 +228,7 @@ function renderDetail() {
 
   if (editing) {
     html += `<button class="add-ex-btn" id="btnAddEx">+ ${t().addExercise}</button>`;
+    html += `<button class="btn-ghost" id="btnFindEx">🔍 ${t().findExercise}</button>`;
   } else if (!started) {
     html += `<button class="btn-primary" id="btnStart">▶ ${t().start}</button>`;
   } else {
@@ -225,16 +242,23 @@ function renderDetail() {
 }
 
 function exerciseTrackCard(e, active) {
-  const setsDone = active?.sets?.[e.id] || 0;
-  const isDone = active?.done?.[e.id] || setsDone >= e.sets;
-  const dots = Array.from({ length: Number(e.sets) || 0 }, (_, i) =>
-    `<div class="set-dot ${i < setsDone ? "filled" : ""}" data-ex="${e.id}" data-set="${i + 1}">${i + 1}</div>`
-  ).join("");
+  const sets = (active && active.log && active.log[e.id]) || [];
+  const doneCount = sets.filter((s) => s.done).length;
+  const isDone = e.sets > 0 && doneCount >= e.sets;
+  const rows = sets.map((s, i) => `
+    <div class="set-row ${s.done ? "done" : ""}">
+      <button class="set-num" data-toggle="${e.id}:${i}">${i + 1}</button>
+      <input class="set-field set-weight" type="number" step="0.5" min="0" inputmode="decimal"
+             placeholder="${t().kg}" value="${s.weight ?? ""}" data-w="${e.id}:${i}" />
+      <span class="set-mult">×</span>
+      <input class="set-field set-reps" type="number" min="0" inputmode="numeric"
+             placeholder="${L(e.reps)}" value="${s.reps ?? ""}" data-r="${e.id}:${i}" />
+    </div>`).join("");
 
   return `
     <div class="ex-card ${isDone ? "done" : ""}" data-card="${e.id}">
-      <div class="ex-top">
-        <div class="ex-thumb" data-info="${e.id}">${thumb(e)}</div>
+      <div class="ex-top" data-info="${e.id}">
+        <div class="ex-thumb">${thumb(e)}</div>
         <div class="ex-main">
           <div class="ex-name">${L(e.name)}</div>
           <div class="ex-sub">${e.sets} × ${L(e.reps)} · ${t().muscles[e.muscle] || ""}</div>
@@ -242,10 +266,12 @@ function exerciseTrackCard(e, active) {
         </div>
         <button class="ex-check" data-check="${e.id}">${isDone ? "✓" : ""}</button>
       </div>
-      <div class="sets-row">
-        <div class="sets-label">${t().setsDone}: ${setsDone}/${e.sets}</div>
-        <div class="set-dots">${dots}</div>
+      ${sets.length ? `
+      <div class="sets-head">
+        <span>${t().setsDone}: ${doneCount}/${e.sets}</span>
+        <span class="sets-colhead">${t().kg} × ${t().reps}</span>
       </div>
+      <div class="set-rows">${rows}</div>` : ""}
     </div>`;
 }
 
@@ -258,10 +284,123 @@ function exImages(e) {
 }
 function thumb(e) {
   const imgs = exImages(e);
-  if (imgs.length) return `<img src="${imgs[0]}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='${escapeAttr(MUSCLE_SVG(e.muscle))}'">`;
+  if (imgs.length) return `<img src="${imgs[0]}" alt="" loading="eager" decoding="async" fetchpriority="high" onerror="this.parentElement.innerHTML='${escapeAttr(MUSCLE_SVG(e.muscle))}'">`;
   return MUSCLE_SVG(e.muscle);
 }
 function escapeAttr(s) { return s.replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/\n/g, ""); }
+
+// ---------- Per-set tracking helpers ----------
+function doneCountFor(active, e) {
+  const arr = active && active.log && active.log[e.id];
+  return arr ? arr.filter((s) => s.done).length : 0;
+}
+function lastLogFor(exId) {
+  // Most recent logged sets for this exercise, to pre-fill the next workout.
+  for (let i = state.sessions.length - 1; i >= 0; i--) {
+    const ex = state.sessions[i].exercises?.find((x) => x.exId === exId);
+    if (ex && ex.logs && ex.logs.length) return ex.logs;
+  }
+  return null;
+}
+function startActive(day) {
+  const log = {};
+  day.exercises.forEach((e) => {
+    const prev = lastLogFor(e.id);
+    const n = Number(e.sets) || 0;
+    log[e.id] = Array.from({ length: n }, (_, i) => {
+      const p = prev ? (prev[i] || prev[prev.length - 1]) : null;
+      return { weight: p ? (p.weight ?? "") : "", reps: p ? (p.reps ?? "") : "", done: false };
+    });
+  });
+  state.active = { dayId: day.id, started: todayStr(), log };
+  save(LS.active, state.active);
+}
+
+// ---------- Exercise database search (free-exercise-db) ----------
+const EXDB_INDEX = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json";
+let exDbCache = null;
+const DB_MUSCLE_MAP = {
+  chest: "chest",
+  "middle back": "back", lats: "back", "lower back": "back", traps: "back",
+  shoulders: "shoulders",
+  biceps: "biceps", forearms: "biceps",
+  triceps: "triceps",
+  quadriceps: "quads", adductors: "quads", abductors: "quads",
+  hamstrings: "hamstrings", glutes: "glutes", calves: "calves",
+  abdominals: "core", neck: "shoulders",
+};
+function mapDbMuscle(m) { return DB_MUSCLE_MAP[String(m || "").toLowerCase()] || "core"; }
+
+function openExerciseSearch(day) {
+  openModal(`
+    <div class="modal-title">${t().findExercise}</div>
+    <input id="exSearchInput" class="ex-search-input" type="search" placeholder="${t().searchPlaceholder}" autocomplete="off" />
+    <div id="exSearchResults" class="ex-search-results"></div>
+    <button class="btn-ghost" id="modalClose" style="margin-top:14px">${t().close}</button>
+  `);
+  const input = document.getElementById("exSearchInput");
+  const results = document.getElementById("exSearchResults");
+  const run = () => renderSearchResults(day, input.value, results);
+  input.oninput = run;
+  if (exDbCache) { run(); return; }
+  results.innerHTML = `<div class="subtle" style="text-align:center;padding:20px">${t().loading}</div>`;
+  fetch(EXDB_INDEX)
+    .then((r) => r.json())
+    .then((data) => { exDbCache = data; run(); })
+    .catch(() => { results.innerHTML = `<div class="subtle" style="text-align:center;padding:20px">${t().searchError}</div>`; });
+}
+
+function renderSearchResults(day, q, container) {
+  if (!exDbCache) return;
+  q = String(q || "").trim().toLowerCase();
+  let list = exDbCache;
+  if (q) {
+    const terms = q.split(/\s+/);
+    list = exDbCache.filter((it) => {
+      const hay = `${it.name} ${(it.primaryMuscles || []).join(" ")} ${it.equipment || ""}`.toLowerCase();
+      return terms.every((tm) => hay.includes(tm));
+    });
+  }
+  const top = list.slice(0, 40);
+  if (!top.length) { container.innerHTML = `<div class="subtle" style="text-align:center;padding:20px">${t().noResults}</div>`; return; }
+  container.innerHTML = top.map((it, idx) => {
+    const img = (it.images && it.images[0])
+      ? `<img src="${EXDB_BASE + it.images[0]}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : "";
+    const muscles = (it.primaryMuscles || []).join(", ");
+    return `
+      <div class="ex-search-item">
+        <div class="ex-search-thumb">${img}</div>
+        <div class="ex-search-info">
+          <div class="ex-search-name">${escapeHtml(it.name)}</div>
+          <div class="ex-search-meta">${escapeHtml(muscles)}${it.equipment ? " · " + escapeHtml(it.equipment) : ""}</div>
+        </div>
+        <button class="ex-search-add" data-add="${idx}">+ ${t().add}</button>
+      </div>`;
+  }).join("");
+  container.querySelectorAll("[data-add]").forEach((btn) =>
+    btn.onclick = () => addExerciseFromDb(day, top[Number(btn.dataset.add)])
+  );
+}
+
+function addExerciseFromDb(day, item) {
+  collectEdits(day);  // keep any unsaved edits that are open behind the modal
+  const folder = (item.images && item.images[0]) ? item.images[0].split("/")[0] : "";
+  const steps = (item.instructions || []).slice();
+  day.exercises.push({
+    id: "x" + Date.now(),
+    muscle: mapDbMuscle(item.primaryMuscles && item.primaryMuscles[0]),
+    exdb: folder,
+    name: { bg: item.name, en: item.name },
+    sets: 3, reps: "8–12",
+    notes: { bg: "", en: "" },
+    steps: { bg: steps.slice(), en: steps.slice() },
+    img: "",
+  });
+  save(LS.program, state.program);
+  closeModal();
+  toast(t().exerciseAdded);
+  render();
+}
 
 function exerciseEditCard(e) {
   const muscleOpts = Object.keys(t().muscles).map((m) =>
@@ -286,6 +425,10 @@ function exerciseEditCard(e) {
         <input data-f="notes" value="${escapeHtml(L(e.notes))}" />
       </div>
       <div class="field">
+        <label>${t().instructions}</label>
+        <textarea data-f="steps" rows="4">${escapeHtml(((e.steps && e.steps[state.lang]) || []).join("\n"))}</textarea>
+      </div>
+      <div class="field">
         <label>${t().imageUrl}</label>
         <input data-f="img" value="${escapeHtml(e.img || "")}" placeholder="https://..." />
       </div>
@@ -306,11 +449,16 @@ function wireDetail(day, started) {
   };
 
   // Exercise info is available whether or not the workout is started.
-  viewEl.querySelectorAll("[data-info]").forEach((el) =>
-    el.onclick = () => openExerciseInfo(getEx(day, el.dataset.info))
+  // Tapping anywhere in the card row (except the check button) opens it.
+  viewEl.querySelectorAll(".ex-top[data-info]").forEach((el) =>
+    el.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-check]")) return;
+      openExerciseInfo(getEx(day, el.dataset.info));
+    })
   );
 
   if (state.view.editing) {
+    document.getElementById("btnFindEx").onclick = () => openExerciseSearch(day);
     document.getElementById("btnAddEx").onclick = () => {
       collectEdits(day);
       day.exercises.push({
@@ -337,33 +485,39 @@ function wireDetail(day, started) {
 
   // Not started yet: only wire the Start button.
   if (!started) {
-    document.getElementById("btnStart").onclick = () => {
-      state.active = { dayId: day.id, started: todayStr(), sets: {}, done: {} };
-      save(LS.active, state.active);
-      render();
-    };
+    document.getElementById("btnStart").onclick = () => { startActive(day); render(); };
     return;
   }
 
-  // Tracking interactions
-  viewEl.querySelectorAll(".set-dot").forEach((dot) =>
-    dot.onclick = () => {
-      const ex = dot.dataset.ex, n = Number(dot.dataset.set);
-      const cur = state.active.sets[ex] || 0;
-      state.active.sets[ex] = cur === n ? n - 1 : n;  // tap same dot to toggle down
-      if ((state.active.sets[ex] || 0) >= getEx(day, ex).sets) state.active.done[ex] = true;
-      else state.active.done[ex] = false;
+  // Tracking interactions — per-set weight / reps and done toggles.
+  viewEl.querySelectorAll(".set-num[data-toggle]").forEach((btn) =>
+    btn.onclick = () => {
+      const parts = btn.dataset.toggle.split(":");
+      const row = state.active.log[parts[0]][Number(parts[1])];
+      row.done = !row.done;
       save(LS.active, state.active);
       render();
     }
   );
+  viewEl.querySelectorAll("[data-w]").forEach((inp) =>
+    inp.oninput = () => {
+      const parts = inp.dataset.w.split(":");
+      state.active.log[parts[0]][Number(parts[1])].weight = inp.value;
+      save(LS.active, state.active);
+    }
+  );
+  viewEl.querySelectorAll("[data-r]").forEach((inp) =>
+    inp.oninput = () => {
+      const parts = inp.dataset.r.split(":");
+      state.active.log[parts[0]][Number(parts[1])].reps = inp.value;
+      save(LS.active, state.active);
+    }
+  );
   viewEl.querySelectorAll("[data-check]").forEach((btn) =>
     btn.onclick = () => {
-      const ex = btn.dataset.check;
-      const exObj = getEx(day, ex);
-      const nowDone = !(state.active.done[ex] || (state.active.sets[ex] || 0) >= exObj.sets);
-      state.active.done[ex] = nowDone;
-      state.active.sets[ex] = nowDone ? exObj.sets : 0;
+      const arr = state.active.log[btn.dataset.check] || [];
+      const allDone = arr.length > 0 && arr.every((s) => s.done);
+      arr.forEach((s) => { s.done = !allDone; });
       save(LS.active, state.active);
       render();
     }
@@ -391,8 +545,16 @@ function collectEdits(day) {
     ex.muscle = get("muscle");
     setLang(ex, "notes", get("notes"));
     ex.img = get("img").trim();
+    setSteps(ex, get("steps"));
   });
   save(LS.program, state.program);
+}
+function setSteps(ex, text) {
+  const arr = String(text).split("\n").map((s) => s.trim()).filter(Boolean);
+  if (!ex.steps || typeof ex.steps !== "object") ex.steps = { bg: [], en: [] };
+  ex.steps[state.lang] = arr;
+  const other = state.lang === "bg" ? "en" : "bg";
+  if (!Array.isArray(ex.steps[other])) ex.steps[other] = [];
 }
 function setLang(obj, field, val) {
   // Edit the field in the currently active language, keep the other side.
@@ -403,7 +565,7 @@ function setLang(obj, field, val) {
 
 function finishWorkout(day) {
   const active = state.active;
-  const anyDone = day.exercises.some((e) => (active.sets[e.id] || 0) > 0 || active.done[e.id]);
+  const anyDone = day.exercises.some((e) => (active.log[e.id] || []).some((s) => s.done));
   if (!anyDone) { toast(state.lang === "bg" ? "Отбележи поне едно упражнение" : "Mark at least one exercise"); return; }
   if (!confirm(t().finishConfirm)) return;
 
@@ -412,11 +574,16 @@ function finishWorkout(day) {
     dayId: day.id,
     dayName: { bg: day.name.bg, en: day.name.en },
     icon: day.icon,
-    exercises: day.exercises.map((e) => ({
-      name: { bg: L(e.name) && e.name.bg ? e.name.bg : L(e.name), en: e.name.en || L(e.name) },
-      setsDone: Math.min(active.sets[e.id] || 0, e.sets) || (active.done[e.id] ? e.sets : 0),
-      sets: e.sets,
-    })),
+    exercises: day.exercises.map((e) => {
+      const arr = active.log[e.id] || [];
+      return {
+        exId: e.id,
+        name: { bg: e.name.bg || L(e.name), en: e.name.en || L(e.name) },
+        sets: e.sets,
+        setsDone: arr.filter((s) => s.done).length,
+        logs: arr.map((s) => ({ weight: s.weight, reps: s.reps, done: s.done })),
+      };
+    }),
   };
   state.sessions.push(session);
   save(LS.sessions, state.sessions);
@@ -488,16 +655,37 @@ function renderCalendar() {
     const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(dnum).padStart(2, "0")}`;
     const list = byDate[key] || [];
     const isToday = key === todayStr();
-    const dots = list.slice(0, 4).map(() => `<span class="cal-dot"></span>`).join("");
+    const more = list.length > 1 ? `<span class="cal-ic-more">${list.length}</span>` : "";
     cells += `
       <div class="cal-cell ${list.length ? "has-workout" : ""} ${isToday ? "today" : ""}" data-date="${key}">
-        <span>${dnum}</span>
-        ${list.length ? `<div class="cal-dots">${dots}</div>` : ""}
+        <span class="cal-num">${dnum}</span>
+        ${list.length ? `<span class="cal-ic">${list[0].icon}${more}</span>` : ""}
       </div>`;
   }
 
   const dow = t().weekdays.map((w) => `<div class="cal-dow">${w}</div>`).join("");
-  const monthCount = state.sessions.filter((s) => s.date.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`)).length;
+  const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const monthDates = Object.keys(byDate).filter((d) => d.startsWith(monthKey)).sort();
+  const monthCount = state.sessions.filter((s) => s.date.startsWith(monthKey)).length;
+
+  const overview = monthDates.length
+    ? monthDates.map((d) => {
+        const parts = d.split("-").map(Number);
+        const dd = parts[2];
+        const wd = t().weekdays[(new Date(parts[0], parts[1] - 1, dd).getDay() + 6) % 7];
+        return byDate[d].map((s) => {
+          const done = s.exercises.filter((e) => e.setsDone > 0).length;
+          const total = s.exercises.length;
+          return `
+            <div class="cal-list-item" data-date="${d}">
+              <span class="cal-list-date"><b>${dd}</b><span>${wd}</span></span>
+              <span class="cal-list-emoji">${s.icon}</span>
+              <span class="cal-list-name">${L(s.dayName)}</span>
+              <span class="cal-list-meta">${done}/${total}</span>
+            </div>`;
+        }).join("");
+      }).join("")
+    : `<div class="subtle" style="text-align:center;padding:16px 0">${t().nothingLogged}</div>`;
 
   viewEl.innerHTML = `
     <div class="cal-head">
@@ -507,11 +695,16 @@ function renderCalendar() {
     </div>
     <div class="subtle" style="text-align:center;margin-bottom:14px">${monthCount} ${t().workoutsCount}</div>
     <div class="cal-grid">${dow}${cells}</div>
+    <div class="section-title" style="margin-top:22px">${t().loggedWorkouts}</div>
+    <div class="cal-list">${overview}</div>
   `;
 
   document.getElementById("calPrev").onclick = () => { state.calMonth--; render(); };
   document.getElementById("calNext").onclick = () => { state.calMonth++; render(); };
   viewEl.querySelectorAll(".cal-cell[data-date]").forEach((c) =>
+    c.onclick = () => openDayLog(c.dataset.date, byDate[c.dataset.date] || [])
+  );
+  viewEl.querySelectorAll(".cal-list-item[data-date]").forEach((c) =>
     c.onclick = () => openDayLog(c.dataset.date, byDate[c.dataset.date] || [])
   );
 }
@@ -527,9 +720,14 @@ function openDayLog(date, list) {
       const idx = state.sessions.indexOf(s);
       const done = s.exercises.filter((e) => e.setsDone > 0).length;
       const total = s.exercises.length;
-      const exLines = s.exercises.map((e) =>
-        `<div class="log-detail">• ${L(e.name)} — ${e.setsDone}/${e.sets} ${t().sets.toLowerCase()}</div>`
-      ).join("");
+      const exLines = s.exercises.map((e) => {
+        let extra = "";
+        if (e.logs && e.logs.length) {
+          const done = e.logs.filter((l) => l.done && (l.weight || l.reps));
+          if (done.length) extra = " · " + done.map((l) => `${l.weight || "–"}${t().kg}×${l.reps || "–"}`).join(", ");
+        }
+        return `<div class="log-detail">• ${L(e.name)} — ${e.setsDone}/${e.sets} ${t().sets.toLowerCase()}${extra}</div>`;
+      }).join("");
       return `
         <div class="log-item" style="flex-direction:column;align-items:stretch;gap:4px">
           <div style="display:flex;align-items:center;gap:10px">
@@ -575,17 +773,28 @@ function openSessionEdit(date, idx) {
 function renderSessionEdit() {
   const s = sessEdit.data;
   const rows = s.exercises.map((e, i) => {
-    const dots = Array.from({ length: Number(e.sets) || 0 }, (_, k) =>
-      `<div class="set-dot ${k < e.setsDone ? "filled" : ""}" data-exi="${i}" data-set="${k + 1}">${k + 1}</div>`
-    ).join("");
+    let body;
+    if (e.logs && e.logs.length) {
+      body = `<div class="set-rows">` + e.logs.map((l, k) => `
+        <div class="set-row ${l.done ? "done" : ""}">
+          <button class="set-num" data-toggle="${i}:${k}">${k + 1}</button>
+          <input class="set-field set-weight" type="number" step="0.5" min="0" inputmode="decimal" placeholder="${t().kg}" value="${l.weight ?? ""}" data-w="${i}:${k}" />
+          <span class="set-mult">×</span>
+          <input class="set-field set-reps" type="number" min="0" inputmode="numeric" placeholder="${t().reps}" value="${l.reps ?? ""}" data-r="${i}:${k}" />
+        </div>`).join("") + `</div>`;
+    } else {
+      const dots = Array.from({ length: Number(e.sets) || 0 }, (_, k) =>
+        `<div class="set-dot ${k < e.setsDone ? "filled" : ""}" data-exi="${i}" data-set="${k + 1}">${k + 1}</div>`
+      ).join("");
+      body = `<div class="sets-label">${t().setsDone}: ${e.setsDone}/${e.sets}</div><div class="set-dots">${dots}</div>`;
+    }
     return `
       <div class="log-edit-row">
         <div class="log-edit-head">
           <span class="log-name">${L(e.name)}</span>
           <button class="icon-btn" data-rm-ex="${i}" title="${t().deleteExercise}">🗑</button>
         </div>
-        <div class="sets-label">${t().setsDone}: ${e.setsDone}/${e.sets}</div>
-        <div class="set-dots">${dots}</div>
+        ${body}
       </div>`;
   }).join("");
   openModal(`
@@ -603,6 +812,27 @@ function renderSessionEdit() {
       const ex = sessEdit.data.exercises[i];
       ex.setsDone = ex.setsDone === n ? n - 1 : n;
       renderSessionEdit();
+    }
+  );
+  document.querySelectorAll(".modal .set-num[data-toggle]").forEach((btn) =>
+    btn.onclick = () => {
+      const parts = btn.dataset.toggle.split(":").map(Number);
+      const ex = sessEdit.data.exercises[parts[0]];
+      ex.logs[parts[1]].done = !ex.logs[parts[1]].done;
+      ex.setsDone = ex.logs.filter((x) => x.done).length;
+      renderSessionEdit();
+    }
+  );
+  document.querySelectorAll(".modal [data-w]").forEach((inp) =>
+    inp.oninput = () => {
+      const parts = inp.dataset.w.split(":").map(Number);
+      sessEdit.data.exercises[parts[0]].logs[parts[1]].weight = inp.value;
+    }
+  );
+  document.querySelectorAll(".modal [data-r]").forEach((inp) =>
+    inp.oninput = () => {
+      const parts = inp.dataset.r.split(":").map(Number);
+      sessEdit.data.exercises[parts[0]].logs[parts[1]].reps = inp.value;
     }
   );
   document.querySelectorAll("[data-rm-ex]").forEach((b) =>
@@ -634,6 +864,7 @@ function renderSessionEdit() {
 //  MODAL helper
 // ============================================================
 let backdrop;
+let modalOpen = false;
 function ensureBackdrop() {
   if (backdrop) return backdrop;
   backdrop = document.createElement("div");
@@ -646,11 +877,15 @@ function ensureBackdrop() {
 function openModal(html) {
   ensureBackdrop();
   document.getElementById("modalBox").innerHTML = html;
+  modalOpen = true;
   backdrop.classList.add("open");
   const close = document.getElementById("modalClose");
   if (close) close.onclick = closeModal;
 }
-function closeModal() { if (backdrop) backdrop.classList.remove("open"); }
+// User-initiated close: step back in history; the popstate handler hides it.
+function closeModal() { if (modalOpen) history.back(); }
+// Actually hide the modal UI (called from the back-navigation handler).
+function hideModal() { modalOpen = false; if (backdrop) backdrop.classList.remove("open"); }
 
 // ============================================================
 //  GLOBAL WIRING
@@ -668,9 +903,61 @@ document.querySelectorAll(".tab").forEach((b) =>
   }
 );
 
-// Register service worker for offline / installable PWA.
+// ============================================================
+//  BACK-BUTTON / SWIPE-BACK NAVIGATION
+//  Keep one sentinel history entry so the first Back press (or iOS edge
+//  swipe) closes the open layer instead of leaving the app. After each
+//  close we re-arm the sentinel; at the base list we let the app exit.
+// ============================================================
+function navArm() { history.pushState({ app: true }, ""); }
+
+function closeTopLayer() {
+  if (modalOpen) { hideModal(); return true; }
+  if (state.tab === "workouts" && state.view.screen === "detail") {
+    state.view.screen = "list"; render(); return true;
+  }
+  if (state.tab === "calendar") {
+    state.tab = "workouts"; state.view.screen = "list"; render(); return true;
+  }
+  return false; // at the base list — allow the app to exit
+}
+
+window.addEventListener("popstate", () => {
+  if (closeTopLayer()) navArm();
+});
+navArm();
+
+// ============================================================
+//  SERVICE WORKER + UPDATE PROMPT
+//  A new release shows a banner asking to update. Workouts live in
+//  localStorage and are never touched, so updating keeps all data.
+// ============================================================
+function showUpdateBanner(reg) {
+  if (document.getElementById("updateBanner")) return;
+  const bar = document.createElement("div");
+  bar.id = "updateBanner";
+  bar.className = "update-banner";
+  bar.innerHTML = `
+    <div class="update-text">
+      <strong>${t().updateTitle}</strong>
+      <span>${t().updateBody}</span>
+    </div>
+    <div class="update-actions">
+      <button class="update-later" id="updateLater">${t().updateLater}</button>
+      <button class="update-now" id="updateNow">${t().updateNow}</button>
+    </div>`;
+  document.body.appendChild(bar);
+  requestAnimationFrame(() => bar.classList.add("show"));
+  document.getElementById("updateLater").onclick = () => bar.remove();
+  document.getElementById("updateNow").onclick = () => {
+    const sw = reg.waiting;
+    if (sw) sw.postMessage({ type: "SKIP_WAITING" });
+    bar.remove();
+  };
+}
+
 if ("serviceWorker" in navigator) {
-  // Reload once when a new service worker takes control, so updated files load immediately.
+  // Reload once when the new service worker takes control, so updated files load immediately.
   let swReloaded = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (swReloaded) return;
@@ -678,7 +965,21 @@ if ("serviceWorker" in navigator) {
     location.reload();
   });
   window.addEventListener("load", () =>
-    navigator.serviceWorker.register("sw.js").then((reg) => reg.update()).catch(() => {})
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      reg.update();
+      // A newer version was already downloaded and is waiting.
+      if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg);
+      // A newer version is being installed right now.
+      reg.addEventListener("updatefound", () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "installed" && navigator.serviceWorker.controller) {
+            showUpdateBanner(reg);
+          }
+        });
+      });
+    }).catch(() => {})
   );
 }
 

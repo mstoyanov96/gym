@@ -1,5 +1,5 @@
 // Simple offline cache. Bump CACHE to force an update when files change.
-const CACHE = "gym-v13";
+const CACHE = "gym-v16";
 const ASSETS = [
   "./",
   "./index.html",
@@ -14,7 +14,13 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // Wait for the user to confirm the update (via SKIP_WAITING) before activating.
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
+});
+
+// The page asks us to activate the freshly installed version.
+self.addEventListener("message", (e) => {
+  if (e.data && e.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (e) => {
@@ -27,7 +33,26 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
-  // Network-first: always try fresh files when online, fall back to cache offline.
+  const url = new URL(e.request.url);
+  const isImage = e.request.destination === "image" ||
+    /\.(png|jpe?g|gif|webp|svg)$/i.test(url.pathname);
+
+  if (isImage) {
+    // Cache-first for images: instant after the first load (incl. remote photos).
+    e.respondWith(
+      caches.match(e.request).then((cached) =>
+        cached ||
+        fetch(e.request).then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+          return res;
+        }).catch(() => cached)
+      )
+    );
+    return;
+  }
+
+  // Network-first for app files: always try fresh when online, fall back to cache offline.
   e.respondWith(
     fetch(e.request).then((res) => {
       const copy = res.clone();
