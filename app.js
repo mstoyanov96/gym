@@ -9,6 +9,7 @@ const LS = {
   active: "gym_active",
   lang: "gym_lang",
   equipment: "gym_equipment",
+  theme: "gym_theme",
 };
 
 // Sensible starting gym inventory (user edits it in the Equipment screen).
@@ -25,12 +26,31 @@ const DEFAULT_EQUIPMENT = {
   ],
 };
 
+// Accent color themes. Each sets the four --primary* CSS variables.
+const THEMES = {
+  coral:   { name: { bg: "Коралово", en: "Coral" },  primary: "#ff6b4a", dark: "#e8542f", soft: "#ffe7df", light: "#ff9472" },
+  blue:    { name: { bg: "Синьо", en: "Blue" },      primary: "#3b82f6", dark: "#2563eb", soft: "#e2ecff", light: "#60a5fa" },
+  green:   { name: { bg: "Зелено", en: "Green" },    primary: "#10b981", dark: "#059669", soft: "#d6f5e8", light: "#34d399" },
+  purple:  { name: { bg: "Лилаво", en: "Purple" },   primary: "#8b5cf6", dark: "#7c3aed", soft: "#ece5ff", light: "#a78bfa" },
+  pink:    { name: { bg: "Розово", en: "Pink" },     primary: "#ec4899", dark: "#db2777", soft: "#fde0ef", light: "#f472b6" },
+  slate:   { name: { bg: "Графит", en: "Slate" },    primary: "#475569", dark: "#334155", soft: "#e4e9f0", light: "#64748b" },
+};
+function applyTheme(key) {
+  const th = THEMES[key] || THEMES.coral;
+  const r = document.documentElement.style;
+  r.setProperty("--primary", th.primary);
+  r.setProperty("--primary-dark", th.dark);
+  r.setProperty("--primary-soft", th.soft);
+  r.setProperty("--primary-light", th.light);
+}
+
 const state = {
   lang: I18N[load(LS.lang, "bg")] ? load(LS.lang, "bg") : "bg",
   program: load(LS.program, null) || clone(DEFAULT_PROGRAM),
   sessions: load(LS.sessions, []),        // [{date:"YYYY-MM-DD", dayId, dayName:{bg,en}, icon, exercises:[{name,setsDone,sets}]}]
   active: load(LS.active, null),          // {dayId, started, sets:{exId:count}, done:{exId:bool}}
   equipment: load(LS.equipment, null) || clone(DEFAULT_EQUIPMENT),
+  theme: load(LS.theme, "coral"),
   tab: "workouts",
   view: { screen: "list", dayId: null, editing: false },
   calMonth: new Date().getFullYear() * 12 + new Date().getMonth(),
@@ -44,6 +64,7 @@ if (!localStorage.getItem(LS.program)) {
 if (!localStorage.getItem(LS.equipment)) {
   save(LS.equipment, state.equipment);
 }
+applyTheme(state.theme);
 
 // Migrate an in-progress session from the old set-counter model to per-set logs.
 if (state.active && !state.active.log) {
@@ -287,8 +308,12 @@ function exerciseTrackCard(e, active) {
       <input class="set-field set-weight" type="text" inputmode="decimal"
              placeholder="${s.pw || t().kg}" value="${s.weight ?? ""}" data-w="${e.id}:${i}" />
       <span class="set-mult">×</span>
-      <input class="set-field set-reps" type="text" inputmode="numeric"
-             placeholder="${s.pr || L(e.reps)}" value="${s.reps ?? ""}" data-r="${e.id}:${i}" />
+      <div class="reps-stepper">
+        <button class="step-btn" data-rstep="${e.id}:${i}:-1" tabindex="-1">−</button>
+        <input class="set-field set-reps" type="text" inputmode="numeric"
+               placeholder="${s.pr || L(e.reps)}" value="${s.reps ?? ""}" data-r="${e.id}:${i}" />
+        <button class="step-btn" data-rstep="${e.id}:${i}:1" tabindex="-1">+</button>
+      </div>
     </div>`).join("");
 
   return `
@@ -649,6 +674,19 @@ function wireDetail(day, started) {
       save(LS.active, state.active);
     }
   );
+  viewEl.querySelectorAll("[data-rstep]").forEach((btn) =>
+    btn.onclick = () => {
+      const [id, idx, delta] = btn.dataset.rstep.split(":");
+      const set = state.active.log[id][Number(idx)];
+      const cur = parseInt(fixDec(set.reps), 10);
+      const base = Number.isFinite(cur) ? cur : (parseInt(fixDec(set.pr), 10) || 0);
+      const next = Math.max(0, base + Number(delta));
+      set.reps = String(next);
+      save(LS.active, state.active);
+      const inp = viewEl.querySelector(`[data-r="${id}:${idx}"]`);
+      if (inp) inp.value = set.reps;
+    }
+  );
   viewEl.querySelectorAll("[data-check]").forEach((btn) =>
     btn.onclick = () => {
       const arr = state.active.log[btn.dataset.check] || [];
@@ -905,8 +943,10 @@ function sortedPlates() {
 }
 
 // Greedy plate loading for ONE side of a symmetric load (barbell side / dumbbell end).
-function calcPlates(target, base) {
+// `maxPerSide` caps how many plates physically fit on one sleeve (dumbbells ~3).
+function calcPlates(target, base, maxPerSide) {
   const tw = Number(target), b = Number(base) || 0;
+  const cap = maxPerSide > 0 ? maxPerSide : Infinity;
   if (!(tw > 0)) return { empty: true, perSide: [], loaded: b };
   const perSideTarget = (tw - b) / 2;
   if (perSideTarget < -1e-9) return { under: true, perSide: [], loaded: b };
@@ -915,10 +955,11 @@ function calcPlates(target, base) {
   let rem = perSideTarget;
   const perSide = [];
   for (const p of avail) {
-    while (p.pairs > 0 && rem >= p.kg - 1e-9) { perSide.push(p.kg); rem -= p.kg; p.pairs--; }
+    while (p.pairs > 0 && rem >= p.kg - 1e-9 && perSide.length < cap) { perSide.push(p.kg); rem -= p.kg; p.pairs--; }
   }
   const loaded = b + perSide.reduce((a, c) => a + c, 0) * 2;
-  return { ok: Math.abs(loaded - tw) < 1e-9, perSide, loaded };
+  const capped = perSide.length >= cap && rem >= 1e-9;
+  return { ok: Math.abs(loaded - tw) < 1e-9, perSide, loaded, capped };
 }
 
 let plateCalc = null;  // { weight, mode:"bar"|"dumbbell" }
@@ -928,8 +969,10 @@ function openPlateCalc(weight, mode) {
 }
 function renderPlateCalc() {
   const eq = state.equipment;
-  const base = plateCalc.mode === "bar" ? Number(eq.bar) || 0 : Number(eq.dumbbellHandle) || 0;
-  const res = plateCalc.weight === "" ? null : calcPlates(plateCalc.weight, base);
+  const isDumbbell = plateCalc.mode !== "bar";
+  const base = isDumbbell ? Number(eq.dumbbellHandle) || 0 : Number(eq.bar) || 0;
+  const maxPerSide = isDumbbell ? 3 : Infinity;  // one dumbbell sleeve fits ~3 plates
+  const res = plateCalc.weight === "" ? null : calcPlates(plateCalc.weight, base, maxPerSide);
   let resultHtml;
   if (!res) {
     resultHtml = `<div class="subtle" style="padding:8px 0">${t().plateEnterWeight}</div>`;
@@ -942,10 +985,13 @@ function renderPlateCalc() {
     const summary = res.ok
       ? `<div class="plate-ok">✓ ${t().plateExact}: ${fmtKg(res.loaded)} ${t().kg}</div>`
       : `<div class="plate-note">≈ ${fmtKg(res.loaded)} ${t().kg} — ${t().plateClosest}</div>`;
+    const capNote = res.capped && isDumbbell
+      ? `<div class="plate-note">${t().plateDumbbellMax.replace("{n}", maxPerSide)}</div>` : "";
     resultHtml = `
       <div class="plate-side-label">${t().platePerSide}</div>
       <div class="plate-chips">${chips}</div>
-      ${summary}`;
+      ${summary}
+      ${capNote}`;
   }
   openModal(`
     <div class="modal-title">🏋️ ${t().plateCalc}</div>
@@ -1017,6 +1063,28 @@ function renderEquipment() {
     toast(t().saved);
     closeModal();
   };
+}
+
+function openThemePicker() {
+  const swatches = Object.entries(THEMES).map(([key, th]) => `
+    <button class="theme-swatch ${state.theme === key ? "active" : ""}" data-theme="${key}"
+            style="--sw1:${th.primary};--sw2:${th.light}">
+      <span class="theme-dot"></span>
+      <span class="theme-label">${L(th.name)}</span>
+    </button>`).join("");
+  openModal(`
+    <div class="modal-title">🎨 ${t().themeTitle}</div>
+    <div class="theme-grid">${swatches}</div>
+    <button class="btn-ghost" id="modalClose" style="margin-top:14px">${t().close}</button>
+  `);
+  document.querySelectorAll("[data-theme]").forEach((b) =>
+    b.onclick = () => {
+      state.theme = b.dataset.theme;
+      save(LS.theme, state.theme);
+      applyTheme(state.theme);
+      openThemePicker();
+    }
+  );
 }
 
 // ============================================================
@@ -1298,6 +1366,7 @@ document.getElementById("langToggle").onclick = () => {
   save(LS.lang, state.lang);
   render();
 };
+document.getElementById("themeToggle").onclick = () => openThemePicker();
 document.querySelectorAll(".tab").forEach((b) =>
   b.onclick = () => {
     state.tab = b.dataset.tab;

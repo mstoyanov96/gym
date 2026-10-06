@@ -108,6 +108,8 @@ const I18N = {
     plateJustBar: "Само основата, без дискове",
     plateEnterWeight: "Въведи тегло, за да сметна дисковете",
     saveLabel: "Запази",
+    themeTitle: "Тема / цвят",
+    plateDumbbellMax: "Дъмбелът побира макс {n} диска на страна",
   },
   en: {
     appTitle: "My Workout",
@@ -216,5 +218,7 @@ const I18N = {
     plateJustBar: "Just the base, no plates",
     plateEnterWeight: "Enter a weight to calculate plates",
     saveLabel: "Save",
+    themeTitle: "Theme / color",
+    plateDumbbellMax: "Dumbbell holds max {n} plates per side",
   },
 };
