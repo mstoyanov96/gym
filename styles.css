@@ -243,13 +243,13 @@ body {
 .tools-row .btn-ghost, .backup-row .btn-ghost {
   flex: 1; min-width: 0; margin-top: 0;
   display: flex; align-items: center; justify-content: center; gap: 7px;
-  background: var(--surface-2); color: var(--text);
-  border: 1px solid var(--line); border-radius: 14px;
-  padding: 13px 10px; font-size: 0.9rem; font-weight: 600;
+  background: var(--primary-soft); color: var(--primary-dark);
+  border: 1.5px solid var(--primary); border-radius: 14px;
+  padding: 13px 10px; font-size: 0.9rem; font-weight: 700;
   white-space: nowrap;
 }
 .tools-row .btn-ghost:active, .backup-row .btn-ghost:active {
-  background: var(--primary-soft); border-color: var(--primary);
+  background: var(--primary); color: #fff;
 }
 
 /* segmented control */
