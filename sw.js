@@ -1,5 +1,5 @@
 // Simple offline cache. Bump CACHE to force an update when files change.
-const CACHE = "gym-v26";
+const CACHE = "gym-v27";
 const ASSETS = [
   "./",
   "./index.html",

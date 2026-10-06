@@ -172,7 +172,7 @@ function renderList() {
   viewEl.querySelectorAll(".day-card").forEach((c) =>
     c.addEventListener("click", () => openDay(c.dataset.day))
   );
-  document.getElementById("btnPlateCalc").onclick = () => openPlateCalc("", "bar");
+  document.getElementById("btnPlateCalc").onclick = () => openPlateCalc("", "dumbbell");
   document.getElementById("btnEquipment").onclick = () => openEquipment();
   document.getElementById("btnExport").onclick = exportData;
   document.getElementById("fileImport").onchange = (e) => {
@@ -676,7 +676,7 @@ function wireDetail(day, started) {
     btn.onclick = () => {
       const arr = (state.active.log && state.active.log[btn.dataset.plate]) || [];
       const src = arr.find((s) => s.weight) || arr.find((s) => s.pw) || arr[0];
-      openPlateCalc(src ? (src.weight || src.pw || "") : "", "bar");
+      openPlateCalc(src ? (src.weight || src.pw || "") : "", "dumbbell");
     }
   );
 }
@@ -923,7 +923,7 @@ function calcPlates(target, base) {
 
 let plateCalc = null;  // { weight, mode:"bar"|"dumbbell" }
 function openPlateCalc(weight, mode) {
-  plateCalc = { weight: weight != null && weight !== "" ? Number(weight) : "", mode: mode || "bar" };
+  plateCalc = { weight: weight != null && weight !== "" ? Number(weight) : "", mode: mode || "dumbbell" };
   renderPlateCalc();
 }
 function renderPlateCalc() {
@@ -950,8 +950,8 @@ function renderPlateCalc() {
   openModal(`
     <div class="modal-title">🏋️ ${t().plateCalc}</div>
     <div class="seg">
-      <button class="seg-btn ${plateCalc.mode === "bar" ? "active" : ""}" data-mode="bar">${t().barbell}</button>
       <button class="seg-btn ${plateCalc.mode === "dumbbell" ? "active" : ""}" data-mode="dumbbell">${t().dumbbell}</button>
+      <button class="seg-btn ${plateCalc.mode === "bar" ? "active" : ""}" data-mode="bar">${t().barbell}</button>
     </div>
     <div class="field">
       <label>${t().targetWeight} (${t().kg})</label>
