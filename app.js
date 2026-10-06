@@ -885,6 +885,56 @@ function computeStreak() {
   return streak;
 }
 
+// ---------- Exercise history ----------
+// Collect the best (heaviest) done set per past session for this exercise.
+function exerciseHistory(exId) {
+  const out = [];
+  state.sessions.forEach((s) => {
+    (s.exercises || []).forEach((e) => {
+      if (e.exId !== exId) return;
+      const logs = (e.logs || []).filter((l) => l.done && (l.weight || l.reps));
+      if (!logs.length) return;
+      let best = logs[0], maxW = 0;
+      logs.forEach((l) => {
+        const w = num(l.weight) || 0;
+        if (w > maxW) maxW = w;
+        const bw = num(best.weight) || 0;
+        if (w > bw || (w === bw && (num(l.reps) || 0) > (num(best.reps) || 0))) best = l;
+      });
+      out.push({ date: s.date, best, maxW });
+    });
+  });
+  out.sort((a, b) => a.date.localeCompare(b.date));
+  return out;
+}
+
+function exerciseHistoryBlock(exId) {
+  const hist = exerciseHistory(exId);
+  if (!hist.length) return `<div class="hist-empty">${t().historyEmpty}</div>`;
+  const recent = hist.slice(-10);
+  const scale = Math.max(...recent.map((h) => h.maxW), 1);
+  const bars = recent.map((h) => {
+    const pct = Math.max(10, Math.round((h.maxW / scale) * 100));
+    const [, m, d] = h.date.split("-");
+    return `<div class="hist-bar">
+      <span class="hist-bar-val">${fmtKg(h.maxW)}</span>
+      <div class="hist-bar-fill" style="height:${pct}%"></div>
+      <span class="hist-bar-date">${d}.${m}</span>
+    </div>`;
+  }).join("");
+  const peak = Math.max(...hist.map((h) => h.maxW));
+  const rows = hist.slice().reverse().slice(0, 8).map((h) => {
+    const [y, m, d] = h.date.split("-");
+    const star = h.maxW === peak && peak > 0 ? ` <span class="hist-pr" title="${t().historyPr}">⭐</span>` : "";
+    const w = num(h.best.weight) || 0;
+    return `<div class="hist-row">
+      <span class="hist-row-date">${d}.${m}.${y.slice(2)}</span>
+      <span class="hist-row-val">${fmtKg(w)}${t().kg} × ${escapeHtml(String(h.best.reps ?? ""))}${star}</span>
+    </div>`;
+  }).join("");
+  return `<div class="hist-chart">${bars}</div><div class="hist-list">${rows}</div>`;
+}
+
 // ---------- Exercise info modal ----------
 function openExerciseInfo(e) {
   const imgs = exImages(e);
@@ -905,6 +955,8 @@ function openExerciseInfo(e) {
     ${tip}
     <div class="modal-section-label">${t().sets} / ${t().reps}</div>
     <div>${e.sets} × ${L(e.reps)}</div>
+    <div class="modal-section-label">📈 ${t().historyTitle}</div>
+    ${exerciseHistoryBlock(e.id)}
     <div class="modal-section-label">${t().targetMuscle}</div>
     <div class="modal-img">${MUSCLE_SVG(e.muscle)}</div>
     <button class="btn-ghost" id="modalClose" style="margin-top:16px">${t().close}</button>
