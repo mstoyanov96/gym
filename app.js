@@ -1429,18 +1429,22 @@ if ("serviceWorker" in navigator) {
   window.addEventListener("load", () =>
     navigator.serviceWorker.register("sw.js").then((reg) => {
       reg.update();
-      // A newer version was already downloaded and is waiting.
-      if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg);
-      // A newer version is being installed right now.
-      reg.addEventListener("updatefound", () => {
-        const sw = reg.installing;
+      const watch = (sw) => {
         if (!sw) return;
         sw.addEventListener("statechange", () => {
-          if (sw.state === "installed" && navigator.serviceWorker.controller) {
-            showUpdateBanner(reg);
-          }
+          if (sw.state === "installed" && navigator.serviceWorker.controller) showUpdateBanner(reg);
         });
-      });
+      };
+      // A newer version was already downloaded and is waiting, or is installing right now.
+      if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg);
+      watch(reg.installing);
+      reg.addEventListener("updatefound", () => watch(reg.installing));
+
+      // Re-check for updates whenever the app regains focus (catches versions that
+      // ship after the tab was first opened).
+      const check = () => { if (document.visibilityState === "visible") reg.update().catch(() => {}); };
+      document.addEventListener("visibilitychange", check);
+      setInterval(check, 60 * 1000);
     }).catch(() => {})
   );
 }
