@@ -58,9 +58,11 @@ body {
   letter-spacing: 0.2px;
 }
 .lang-toggle {
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--primary-dark);
-  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border-radius: 999px;
   height: 36px;
   padding: 0 16px;
@@ -75,13 +77,13 @@ body {
   width: 36px;
   height: 36px;
   padding: 0;
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   line-height: 1;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(255, 255, 255, 0.9);
-  color: var(--primary-dark);
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
 }
 
 /* ---------- Layout ---------- */
