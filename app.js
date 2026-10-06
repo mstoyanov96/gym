@@ -132,7 +132,7 @@ const viewEl = document.getElementById("view");
 
 function render() {
   document.getElementById("appTitle").textContent = "🏋️ " + t().appTitle;
-  document.getElementById("langToggle").textContent = state.lang === "bg" ? "EN" : "BG";
+  document.getElementById("langToggle").textContent = state.lang === "bg" ? "BG" : "EN";
   document.documentElement.lang = state.lang;
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     el.textContent = t()[el.dataset.i18n];
