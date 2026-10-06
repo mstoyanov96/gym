@@ -1120,12 +1120,14 @@ function openDayLog(date, list) {
         const full = e.setsDone >= e.sets;
         return `
           <div class="log-ex">
-            <div class="log-ex-top">
-              <span class="log-ex-thumb">${sessionThumb(e)}</span>
-              <span class="log-ex-name">${L(e.name)}</span>
-              <span class="log-ex-sets ${full ? "full" : ""}">${e.setsDone}/${e.sets}</span>
+            <span class="log-ex-thumb">${sessionThumb(e)}</span>
+            <div class="log-ex-body">
+              <div class="log-ex-top">
+                <span class="log-ex-name">${L(e.name)}</span>
+                <span class="log-ex-sets ${full ? "full" : ""}">${e.setsDone}/${e.sets}</span>
+              </div>
+              ${chips}
             </div>
-            ${chips}
           </div>`;
       }).join("");
       return `
