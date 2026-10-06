@@ -70,7 +70,18 @@ body {
 }
 .lang-toggle:active { transform: scale(0.94); }
 .header-actions { display: flex; align-items: center; gap: 8px; }
-#settingsToggle { padding: 6px 10px; font-size: 1rem; line-height: 1; }
+#settingsToggle {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.9);
+  color: var(--primary-dark);
+}
 
 /* ---------- Layout ---------- */
 .view {
