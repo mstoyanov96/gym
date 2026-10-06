@@ -8,6 +8,21 @@ const LS = {
   sessions: "gym_sessions",
   active: "gym_active",
   lang: "gym_lang",
+  equipment: "gym_equipment",
+};
+
+// Sensible starting gym inventory (user edits it in the Equipment screen).
+const DEFAULT_EQUIPMENT = {
+  bar: 20,              // Olympic barbell weight (kg)
+  dumbbellHandle: 2,    // weight of one empty dumbbell handle (kg)
+  plates: [             // total plates owned (count is the full number, not pairs)
+    { kg: 20, count: 4 },
+    { kg: 15, count: 2 },
+    { kg: 10, count: 4 },
+    { kg: 5, count: 4 },
+    { kg: 2.5, count: 4 },
+    { kg: 1.25, count: 2 },
+  ],
 };
 
 const state = {
@@ -15,6 +30,7 @@ const state = {
   program: load(LS.program, null) || clone(DEFAULT_PROGRAM),
   sessions: load(LS.sessions, []),        // [{date:"YYYY-MM-DD", dayId, dayName:{bg,en}, icon, exercises:[{name,setsDone,sets}]}]
   active: load(LS.active, null),          // {dayId, started, sets:{exId:count}, done:{exId:bool}}
+  equipment: load(LS.equipment, null) || clone(DEFAULT_EQUIPMENT),
   tab: "workouts",
   view: { screen: "list", dayId: null, editing: false },
   calMonth: new Date().getFullYear() * 12 + new Date().getMonth(),
@@ -24,6 +40,9 @@ const state = {
 // so app updates (even with a newer default) can't wipe the user's edits.
 if (!localStorage.getItem(LS.program)) {
   save(LS.program, state.program);
+}
+if (!localStorage.getItem(LS.equipment)) {
+  save(LS.equipment, state.equipment);
 }
 
 // Migrate an in-progress session from the old set-counter model to per-set logs.
@@ -134,6 +153,10 @@ function renderList() {
   }).join("");
 
   html += `
+    <div class="tools-row">
+      <button class="btn-ghost" id="btnPlateCalc">🏋️ ${t().plateCalc}</button>
+      <button class="btn-ghost" id="btnEquipment">⚙️ ${t().equipment}</button>
+    </div>
     <div class="backup-row">
       <button class="btn-ghost" id="btnExport">⬇️ ${t().backup}</button>
       <label class="btn-ghost backup-label">⬆️ ${t().restore}
@@ -146,6 +169,8 @@ function renderList() {
   viewEl.querySelectorAll(".day-card").forEach((c) =>
     c.addEventListener("click", () => openDay(c.dataset.day))
   );
+  document.getElementById("btnPlateCalc").onclick = () => openPlateCalc("", "bar");
+  document.getElementById("btnEquipment").onclick = () => openEquipment();
   document.getElementById("btnExport").onclick = exportData;
   document.getElementById("fileImport").onchange = (e) => {
     if (e.target.files[0]) importData(e.target.files[0]);
@@ -156,7 +181,7 @@ function renderList() {
 function exportData() {
   const payload = {
     app: "my-workout", backupVersion: 1, exported: new Date().toISOString(),
-    program: state.program, sessions: state.sessions,
+    program: state.program, sessions: state.sessions, equipment: state.equipment,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -178,6 +203,7 @@ function importData(file) {
       if (!confirm(t().importConfirm)) return;
       if (data.program?.days) { state.program = data.program; save(LS.program, state.program); }
       if (Array.isArray(data.sessions)) { state.sessions = data.sessions; save(LS.sessions, state.sessions); }
+      if (data.equipment?.plates) { state.equipment = data.equipment; save(LS.equipment, state.equipment); }
       toast(t().importDone);
       render();
     } catch {
@@ -256,10 +282,10 @@ function exerciseTrackCard(e, active) {
     <div class="set-row ${s.done ? "done" : ""}">
       <button class="set-num" data-toggle="${e.id}:${i}">${i + 1}</button>
       <input class="set-field set-weight" type="number" step="0.5" min="0" inputmode="decimal"
-             placeholder="${t().kg}" value="${s.weight ?? ""}" data-w="${e.id}:${i}" />
+             placeholder="${s.pw || t().kg}" value="${s.weight ?? ""}" data-w="${e.id}:${i}" />
       <span class="set-mult">×</span>
       <input class="set-field set-reps" type="number" min="0" inputmode="numeric"
-             placeholder="${L(e.reps)}" value="${s.reps ?? ""}" data-r="${e.id}:${i}" />
+             placeholder="${s.pr || L(e.reps)}" value="${s.reps ?? ""}" data-r="${e.id}:${i}" />
     </div>`).join("");
 
   return `
@@ -276,7 +302,10 @@ function exerciseTrackCard(e, active) {
       ${sets.length ? `
       <div class="sets-head">
         <span>${t().setsDone}: ${doneCount}/${e.sets}</span>
-        <span class="sets-colhead">${t().kg} × ${t().reps}</span>
+        <span class="sets-headright">
+          <span class="sets-colhead">${t().kg} × ${t().reps}</span>
+          <button class="plate-btn" data-plate="${e.id}" title="${t().plateCalc}">🏋️</button>
+        </span>
       </div>
       <div class="set-rows">${rows}</div>` : ""}
     </div>`;
@@ -316,7 +345,8 @@ function startActive(day) {
     const n = Number(e.sets) || 0;
     log[e.id] = Array.from({ length: n }, (_, i) => {
       const p = prev ? (prev[i] || prev[prev.length - 1]) : null;
-      return { weight: p ? (p.weight ?? "") : "", reps: p ? (p.reps ?? "") : "", done: false };
+      // Keep the actual value empty; show last time's numbers as a grey hint (pw/pr).
+      return { weight: "", reps: "", pw: p ? (p.weight ?? "") : "", pr: p ? (p.reps ?? "") : "", done: false };
     });
   });
   state.active = { dayId: day.id, started: todayStr(), startedAt: Date.now(), log };
@@ -586,6 +616,10 @@ function wireDetail(day, started) {
       const parts = btn.dataset.toggle.split(":");
       const row = state.active.log[parts[0]][Number(parts[1])];
       row.done = !row.done;
+      if (row.done) {
+        if (row.weight === "" || row.weight == null) row.weight = row.pw ?? "";
+        if (row.reps === "" || row.reps == null) row.reps = row.pr ?? "";
+      }
       save(LS.active, state.active);
       render();
     }
@@ -608,7 +642,13 @@ function wireDetail(day, started) {
     btn.onclick = () => {
       const arr = state.active.log[btn.dataset.check] || [];
       const allDone = arr.length > 0 && arr.every((s) => s.done);
-      arr.forEach((s) => { s.done = !allDone; });
+      arr.forEach((s) => {
+        s.done = !allDone;
+        if (s.done) {
+          if (s.weight === "" || s.weight == null) s.weight = s.pw ?? "";
+          if (s.reps === "" || s.reps == null) s.reps = s.pr ?? "";
+        }
+      });
       save(LS.active, state.active);
       render();
     }
@@ -621,6 +661,13 @@ function wireDetail(day, started) {
       state.view.screen = "list"; render();
     }
   };
+  viewEl.querySelectorAll("[data-plate]").forEach((btn) =>
+    btn.onclick = () => {
+      const arr = (state.active.log && state.active.log[btn.dataset.plate]) || [];
+      const src = arr.find((s) => s.weight) || arr.find((s) => s.pw) || arr[0];
+      openPlateCalc(src ? (src.weight || src.pw || "") : "", "bar");
+    }
+  );
 }
 
 function getEx(day, id) { return day.exercises.find((e) => e.id === id); }
@@ -830,6 +877,134 @@ function openExerciseInfo(e) {
     <div class="modal-img">${MUSCLE_SVG(e.muscle)}</div>
     <button class="btn-ghost" id="modalClose" style="margin-top:16px">${t().close}</button>
   `);
+}
+
+// ============================================================
+//  EQUIPMENT + PLATE CALCULATOR
+// ============================================================
+function saveEquipment() { save(LS.equipment, state.equipment); }
+function fmtKg(n) { return Number.isInteger(n) ? String(n) : String(Number(Number(n).toFixed(2))); }
+
+function sortedPlates() {
+  return (state.equipment.plates || [])
+    .map((p) => ({ kg: Number(p.kg) || 0, count: Math.max(0, Math.floor(Number(p.count) || 0)) }))
+    .filter((p) => p.kg > 0 && p.count > 0)
+    .sort((a, b) => b.kg - a.kg);
+}
+
+// Greedy plate loading for ONE side of a symmetric load (barbell side / dumbbell end).
+function calcPlates(target, base) {
+  const tw = Number(target), b = Number(base) || 0;
+  if (!(tw > 0)) return { empty: true, perSide: [], loaded: b };
+  const perSideTarget = (tw - b) / 2;
+  if (perSideTarget < -1e-9) return { under: true, perSide: [], loaded: b };
+  if (perSideTarget < 1e-9) return { ok: true, perSide: [], loaded: b };
+  const avail = sortedPlates().map((p) => ({ kg: p.kg, pairs: Math.floor(p.count / 2) }));
+  let rem = perSideTarget;
+  const perSide = [];
+  for (const p of avail) {
+    while (p.pairs > 0 && rem >= p.kg - 1e-9) { perSide.push(p.kg); rem -= p.kg; p.pairs--; }
+  }
+  const loaded = b + perSide.reduce((a, c) => a + c, 0) * 2;
+  return { ok: Math.abs(loaded - tw) < 1e-9, perSide, loaded };
+}
+
+let plateCalc = null;  // { weight, mode:"bar"|"dumbbell" }
+function openPlateCalc(weight, mode) {
+  plateCalc = { weight: weight != null && weight !== "" ? Number(weight) : "", mode: mode || "bar" };
+  renderPlateCalc();
+}
+function renderPlateCalc() {
+  const eq = state.equipment;
+  const base = plateCalc.mode === "bar" ? Number(eq.bar) || 0 : Number(eq.dumbbellHandle) || 0;
+  const res = plateCalc.weight === "" ? null : calcPlates(plateCalc.weight, base);
+  let resultHtml;
+  if (!res) {
+    resultHtml = `<div class="subtle" style="padding:8px 0">${t().plateEnterWeight}</div>`;
+  } else if (res.under) {
+    resultHtml = `<div class="plate-note">${t().plateBelowBar} (${fmtKg(base)} ${t().kg})</div>`;
+  } else if (!res.perSide.length) {
+    resultHtml = `<div class="plate-note">${t().plateJustBar} (${fmtKg(base)} ${t().kg})</div>`;
+  } else {
+    const chips = res.perSide.map((kg) => `<span class="plate-chip">${fmtKg(kg)}</span>`).join("");
+    const summary = res.ok
+      ? `<div class="plate-ok">✓ ${t().plateExact}: ${fmtKg(res.loaded)} ${t().kg}</div>`
+      : `<div class="plate-note">≈ ${fmtKg(res.loaded)} ${t().kg} — ${t().plateClosest}</div>`;
+    resultHtml = `
+      <div class="plate-side-label">${t().platePerSide}</div>
+      <div class="plate-chips">${chips}</div>
+      ${summary}`;
+  }
+  openModal(`
+    <div class="modal-title">🏋️ ${t().plateCalc}</div>
+    <div class="seg">
+      <button class="seg-btn ${plateCalc.mode === "bar" ? "active" : ""}" data-mode="bar">${t().barbell}</button>
+      <button class="seg-btn ${plateCalc.mode === "dumbbell" ? "active" : ""}" data-mode="dumbbell">${t().dumbbell}</button>
+    </div>
+    <div class="field">
+      <label>${t().targetWeight} (${t().kg})</label>
+      <input id="plateWeight" type="number" step="0.5" min="0" inputmode="decimal" value="${plateCalc.weight}" />
+    </div>
+    <div class="plate-result">${resultHtml}</div>
+    <div class="subtle" style="margin-top:10px">${plateCalc.mode === "bar" ? t().barbell : t().dumbbell}: ${fmtKg(base)} ${t().kg}</div>
+    <button class="btn-ghost" id="openEquip" style="margin-top:12px">⚙️ ${t().editEquipment}</button>
+    <button class="btn-ghost" id="modalClose" style="margin-top:8px">${t().close}</button>
+  `);
+  document.querySelectorAll(".seg-btn[data-mode]").forEach((b) =>
+    b.onclick = () => { plateCalc.mode = b.dataset.mode; renderPlateCalc(); }
+  );
+  const wInput = document.getElementById("plateWeight");
+  wInput.oninput = () => { plateCalc.weight = wInput.value === "" ? "" : Number(wInput.value); renderPlateCalc(); };
+  document.getElementById("openEquip").onclick = () => openEquipment();
+}
+
+function openEquipment() { renderEquipment(); }
+function renderEquipment() {
+  const eq = state.equipment;
+  const plateRows = (eq.plates || []).map((p, i) => `
+    <div class="equip-row">
+      <input class="equip-kg" type="number" step="0.25" min="0" inputmode="decimal" value="${p.kg}" data-pk="${i}" placeholder="${t().kg}" />
+      <span class="equip-x">×</span>
+      <input class="equip-count" type="number" min="0" step="2" inputmode="numeric" value="${p.count}" data-pc="${i}" placeholder="${t().count}" />
+      <button class="icon-btn" data-prm="${i}" title="${t().deleteExercise}">🗑</button>
+    </div>`).join("");
+  openModal(`
+    <div class="modal-title">⚙️ ${t().equipment}</div>
+    <div class="field-row">
+      <div class="field"><label>${t().barWeight} (${t().kg})</label><input id="eqBar" type="number" step="0.5" min="0" inputmode="decimal" value="${eq.bar}" /></div>
+      <div class="field"><label>${t().handleWeight} (${t().kg})</label><input id="eqHandle" type="number" step="0.5" min="0" inputmode="decimal" value="${eq.dumbbellHandle}" /></div>
+    </div>
+    <div class="modal-section-label">${t().plates} (${t().kg} × ${t().count})</div>
+    <div class="subtle" style="margin-bottom:8px">${t().platesHint}</div>
+    <div id="equipPlates">${plateRows}</div>
+    <button class="btn-ghost" id="eqAdd" style="margin-top:6px">+ ${t().addPlate}</button>
+    <div class="modal-actions">
+      <button class="btn-primary" id="eqSave">✓ ${t().saveLabel}</button>
+      <button class="btn-ghost" id="modalClose">${t().close}</button>
+    </div>
+  `);
+  const collect = () => {
+    const eqn = state.equipment;
+    eqn.bar = Number(document.getElementById("eqBar").value) || 0;
+    eqn.dumbbellHandle = Number(document.getElementById("eqHandle").value) || 0;
+    document.querySelectorAll("[data-pk]").forEach((inp) => {
+      const i = Number(inp.dataset.pk); if (eqn.plates[i]) eqn.plates[i].kg = Number(inp.value) || 0;
+    });
+    document.querySelectorAll("[data-pc]").forEach((inp) => {
+      const i = Number(inp.dataset.pc); if (eqn.plates[i]) eqn.plates[i].count = Math.max(0, Math.floor(Number(inp.value) || 0));
+    });
+  };
+  document.getElementById("eqAdd").onclick = () => { collect(); state.equipment.plates.push({ kg: 0, count: 0 }); renderEquipment(); };
+  document.querySelectorAll("[data-prm]").forEach((b) =>
+    b.onclick = () => { collect(); state.equipment.plates.splice(Number(b.dataset.prm), 1); renderEquipment(); }
+  );
+  document.getElementById("eqSave").onclick = () => {
+    collect();
+    state.equipment.plates = state.equipment.plates.filter((p) => p.kg > 0 && p.count > 0).sort((a, b) => b.kg - a.kg);
+    saveEquipment();
+    toast(t().saved);
+    closeModal();
+  };
 }
 
 // ============================================================
