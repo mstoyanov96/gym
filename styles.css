@@ -58,11 +58,12 @@ body {
   letter-spacing: 0.2px;
 }
 .lang-toggle {
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
-  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--primary-dark);
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
   border-radius: 999px;
-  padding: 6px 14px;
+  height: 36px;
+  padding: 0 16px;
   font-weight: 700;
   font-size: 0.85rem;
   cursor: pointer;
