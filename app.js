@@ -492,6 +492,7 @@ function exerciseEditCard(e) {
     <div class="ex-card" data-edit="${e.id}">
       <div class="ex-edit-head">
         <span class="ex-drag" data-drag-handle title="${t().dragToReorder}">⠿</span>
+        <span class="ex-edit-thumb">${thumb(e)}</span>
         <span class="ex-edit-name">${escapeHtml(L(e.name))}</span>
       </div>
       <div class="field">
@@ -510,10 +511,10 @@ function exerciseEditCard(e) {
         <label>${t().notes}</label>
         <input data-f="notes" value="${escapeHtml(L(e.notes))}" />
       </div>
-      <div class="field">
-        <label>${t().instructions}</label>
+      <details class="field ex-edit-steps">
+        <summary>${t().instructions}</summary>
         <textarea data-f="steps" rows="4">${escapeHtml(((e.steps && e.steps[state.lang]) || []).join("\n"))}</textarea>
-      </div>
+      </details>
       <div class="field">
         <label>${t().imageUrl}</label>
         <input data-f="img" value="${escapeHtml(e.img || "")}" placeholder="https://..." />
@@ -622,19 +623,54 @@ function wireDetail(day, started) {
 function getEx(day, id) { return day.exercises.find((e) => e.id === id); }
 
 // Touch/mouse drag-and-drop reordering of exercise cards in edit mode.
+// The dragged card follows the finger; the displaced card glides (FLIP) into place.
 function enableDragReorder(day) {
-  let dragEl = null, autoScroll = 0, raf = 0;
+  let dragEl = null, startY = 0, lastY = 0, autoScroll = 0, raf = 0;
+  const siblings = () => [...viewEl.querySelectorAll(".ex-card[data-edit]")];
 
-  const cardAtY = (y) =>
-    [...viewEl.querySelectorAll(".ex-card[data-edit]")].find((c) => {
-      if (c === dragEl) return false;
-      const r = c.getBoundingClientRect();
-      return y >= r.top && y <= r.bottom;
+  const glide = (el, fromDy) => {
+    if (!fromDy) return;
+    el.style.transition = "none";
+    el.style.transform = `translateY(${fromDy}px)`;
+    requestAnimationFrame(() => {
+      el.style.transition = "transform .18s cubic-bezier(.2,.7,.3,1)";
+      el.style.transform = "";
     });
+  };
+
+  // Swap the dragged card with a neighbour, keeping it visually under the finger.
+  const swap = (sib, mutate) => {
+    const sibTop = sib.getBoundingClientRect().top;
+    const dragTop = dragEl.getBoundingClientRect().top;
+    mutate();
+    startY += dragEl.getBoundingClientRect().top - dragTop;   // compensate layout shift
+    dragEl.style.transform = `translateY(${lastY - startY}px)`;
+    glide(sib, sibTop - sib.getBoundingClientRect().top);
+  };
+
+  const reorder = () => {
+    const list = siblings();
+    const i = list.indexOf(dragEl);
+    const center = dragEl.getBoundingClientRect().top + dragEl.offsetHeight / 2;
+    const next = list[i + 1], prev = list[i - 1];
+    if (next) {
+      const r = next.getBoundingClientRect();
+      if (center > r.top + r.height / 2) return swap(next, () => dragEl.parentNode.insertBefore(next, dragEl));
+    }
+    if (prev) {
+      const r = prev.getBoundingClientRect();
+      if (center < r.top + r.height / 2) return swap(prev, () => dragEl.parentNode.insertBefore(dragEl, prev));
+    }
+  };
 
   const tick = () => {
-    if (autoScroll) { window.scrollBy(0, autoScroll); raf = requestAnimationFrame(tick); }
-    else raf = 0;
+    if (autoScroll && dragEl) {
+      window.scrollBy(0, autoScroll);
+      startY -= autoScroll;                                   // keep card under finger while scrolling
+      dragEl.style.transform = `translateY(${lastY - startY}px)`;
+      reorder();
+      raf = requestAnimationFrame(tick);
+    } else raf = 0;
   };
 
   viewEl.querySelectorAll("[data-drag-handle]").forEach((handle) => {
@@ -642,22 +678,17 @@ function enableDragReorder(day) {
     handle.addEventListener("pointerdown", (ev) => {
       ev.preventDefault();
       dragEl = card;
+      startY = lastY = ev.clientY;
       card.classList.add("dragging");
       document.body.classList.add("reordering");
 
       const move = (e) => {
-        const y = e.clientY;
-        const other = cardAtY(y);
-        if (other) {
-          const r = other.getBoundingClientRect();
-          if (y < r.top + r.height / 2) other.parentNode.insertBefore(dragEl, other);
-          else other.parentNode.insertBefore(dragEl, other.nextSibling);
-        }
-        // Auto-scroll when dragging near the viewport edges.
-        const margin = 70;
-        if (y < margin) autoScroll = -Math.ceil((margin - y) / 6);
-        else if (y > window.innerHeight - margin) autoScroll = Math.ceil((y - (window.innerHeight - margin)) / 6);
-        else autoScroll = 0;
+        lastY = e.clientY;
+        dragEl.style.transform = `translateY(${lastY - startY}px)`;
+        reorder();
+        const m = 70, h = window.innerHeight;
+        autoScroll = lastY < m ? -Math.ceil((m - lastY) / 5)
+          : lastY > h - m ? Math.ceil((lastY - (h - m)) / 5) : 0;
         if (autoScroll && !raf) raf = requestAnimationFrame(tick);
       };
       const up = () => {
@@ -667,8 +698,12 @@ function enableDragReorder(day) {
         autoScroll = 0;
         card.classList.remove("dragging");
         document.body.classList.remove("reordering");
-        commitOrder(day);
+        // Settle the card into its slot, then persist the new order.
+        dragEl.style.transition = "transform .18s cubic-bezier(.2,.7,.3,1)";
+        dragEl.style.transform = "";
+        const el = dragEl;
         dragEl = null;
+        setTimeout(() => { el.style.transition = ""; commitOrder(day); }, 170);
       };
       document.addEventListener("pointermove", move);
       document.addEventListener("pointerup", up);
