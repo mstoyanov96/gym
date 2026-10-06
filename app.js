@@ -178,30 +178,10 @@ function renderList() {
       </div>`;
   }).join("");
 
-  html += `
-    <div class="tools-row">
-      <button class="btn-ghost" id="btnPlateCalc">🏋️ ${t().plateCalc}</button>
-      <button class="btn-ghost" id="btnEquipment">⚙️ ${t().equipment}</button>
-    </div>
-    <div class="backup-row">
-      <button class="btn-ghost" id="btnExport">⬇️ ${t().backup}</button>
-      <label class="btn-ghost backup-label">⬆️ ${t().restore}
-        <input type="file" id="fileImport" accept="application/json,.json" hidden />
-      </label>
-    </div>
-    <div class="subtle backup-hint">${t().backupHint}</div>`;
-
   viewEl.innerHTML = html;
   viewEl.querySelectorAll(".day-card").forEach((c) =>
     c.addEventListener("click", () => openDay(c.dataset.day))
   );
-  document.getElementById("btnPlateCalc").onclick = () => openPlateCalc("", "dumbbell");
-  document.getElementById("btnEquipment").onclick = () => openEquipment();
-  document.getElementById("btnExport").onclick = exportData;
-  document.getElementById("fileImport").onchange = (e) => {
-    if (e.target.files[0]) importData(e.target.files[0]);
-    e.target.value = "";
-  };
 }
 
 function exportData() {
@@ -1067,6 +1047,31 @@ function renderEquipment() {
   };
 }
 
+function openSettings() {
+  openModal(`
+    <div class="modal-title">⚙️ ${t().settings}</div>
+    <div class="settings-list">
+      <button class="settings-item" id="setTheme"><span>🎨</span> ${t().themeTitle}</button>
+      <button class="settings-item" id="setEquipment"><span>🏋️</span> ${t().equipment}</button>
+      <button class="settings-item" id="setPlate"><span>🧮</span> ${t().plateCalc}</button>
+      <button class="settings-item" id="setExport"><span>⬇️</span> ${t().backup}</button>
+      <label class="settings-item" id="setImport"><span>⬆️</span> ${t().restore}
+        <input type="file" id="fileImport" accept="application/json,.json" hidden />
+      </label>
+    </div>
+    <div class="subtle backup-hint" style="margin-top:10px">${t().backupHint}</div>
+    <button class="btn-ghost" id="modalClose" style="margin-top:14px">${t().close}</button>
+  `);
+  document.getElementById("setTheme").onclick = () => openThemePicker();
+  document.getElementById("setEquipment").onclick = () => openEquipment();
+  document.getElementById("setPlate").onclick = () => openPlateCalc("", "dumbbell");
+  document.getElementById("setExport").onclick = () => exportData();
+  document.getElementById("fileImport").onchange = (e) => {
+    if (e.target.files[0]) importData(e.target.files[0]);
+    e.target.value = "";
+  };
+}
+
 function openThemePicker() {
   const swatches = Object.entries(THEMES).map(([key, th]) => `
     <button class="theme-swatch ${state.theme === key ? "active" : ""}" data-theme="${key}"
@@ -1368,7 +1373,7 @@ document.getElementById("langToggle").onclick = () => {
   save(LS.lang, state.lang);
   render();
 };
-document.getElementById("themeToggle").onclick = () => openThemePicker();
+document.getElementById("settingsToggle").onclick = () => openSettings();
 document.querySelectorAll(".tab").forEach((b) =>
   b.onclick = () => {
     state.tab = b.dataset.tab;

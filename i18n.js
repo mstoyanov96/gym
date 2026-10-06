@@ -110,6 +110,7 @@ const I18N = {
     saveLabel: "Запази",
     themeTitle: "Тема / цвят",
     plateDumbbellMax: "Дъмбелът побира макс {n} диска на страна",
+    settings: "Настройки",
   },
   en: {
     appTitle: "My Workout",
@@ -220,5 +221,6 @@ const I18N = {
     saveLabel: "Save",
     themeTitle: "Theme / color",
     plateDumbbellMax: "Dumbbell holds max {n} plates per side",
+    settings: "Settings",
   },
 };

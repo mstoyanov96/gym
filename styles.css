@@ -70,7 +70,7 @@ body {
 }
 .lang-toggle:active { transform: scale(0.94); }
 .header-actions { display: flex; align-items: center; gap: 8px; }
-#themeToggle { padding: 6px 10px; font-size: 1rem; line-height: 1; }
+#settingsToggle { padding: 6px 10px; font-size: 1rem; line-height: 1; }
 
 /* ---------- Layout ---------- */
 .view {
@@ -290,6 +290,17 @@ body {
   background: linear-gradient(135deg, var(--sw1), var(--sw2));
 }
 .theme-label { white-space: nowrap; }
+
+/* settings menu */
+.settings-list { display: flex; flex-direction: column; gap: 8px; }
+.settings-item {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 14px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--surface); color: var(--text);
+  font-family: inherit; font-size: 1rem; font-weight: 600; cursor: pointer; text-align: left;
+}
+.settings-item span { font-size: 1.2rem; width: 24px; text-align: center; flex-shrink: 0; }
+.settings-item:active { background: var(--primary-soft); border-color: var(--primary); }
 
 /* exercise database search */
 .ex-search-input {
