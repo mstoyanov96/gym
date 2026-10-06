@@ -68,6 +68,9 @@ function load(key, fallback) {
   catch { return fallback; }
 }
 function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+// Accept both "," and "." as decimal separator (iOS numeric keyboards type ",").
+function fixDec(v) { return String(v ?? "").replace(",", "."); }
+function num(v) { const n = Number(fixDec(v)); return Number.isFinite(n) ? n : NaN; }
 function t() { return I18N[state.lang] || I18N.bg; }
 function L(obj) {
   // Resolve a bilingual field (string or {bg,en}).
@@ -281,10 +284,10 @@ function exerciseTrackCard(e, active) {
   const rows = sets.map((s, i) => `
     <div class="set-row ${s.done ? "done" : ""}">
       <button class="set-num" data-toggle="${e.id}:${i}">${i + 1}</button>
-      <input class="set-field set-weight" type="number" step="0.5" min="0" inputmode="decimal"
+      <input class="set-field set-weight" type="text" inputmode="decimal"
              placeholder="${s.pw || t().kg}" value="${s.weight ?? ""}" data-w="${e.id}:${i}" />
       <span class="set-mult">×</span>
-      <input class="set-field set-reps" type="number" min="0" inputmode="numeric"
+      <input class="set-field set-reps" type="text" inputmode="numeric"
              placeholder="${s.pr || L(e.reps)}" value="${s.reps ?? ""}" data-r="${e.id}:${i}" />
     </div>`).join("");
 
@@ -324,6 +327,14 @@ function thumb(e) {
   return MUSCLE_SVG(e.muscle);
 }
 function escapeAttr(s) { return s.replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/\n/g, ""); }
+
+// Thumbnail for a logged (session) exercise. Uses its own stored image if present,
+// otherwise falls back to the matching program exercise by id, then muscle art.
+function sessionThumb(se) {
+  if (se.img || se.exdb) return thumb(se);
+  const prog = (state.program.days || []).flatMap((d) => d.exercises || []).find((e) => e.id === se.exId);
+  return thumb(prog || se);
+}
 
 // ---------- Per-set tracking helpers ----------
 function doneCountFor(active, e) {
@@ -627,14 +638,14 @@ function wireDetail(day, started) {
   viewEl.querySelectorAll("[data-w]").forEach((inp) =>
     inp.oninput = () => {
       const parts = inp.dataset.w.split(":");
-      state.active.log[parts[0]][Number(parts[1])].weight = inp.value;
+      state.active.log[parts[0]][Number(parts[1])].weight = fixDec(inp.value);
       save(LS.active, state.active);
     }
   );
   viewEl.querySelectorAll("[data-r]").forEach((inp) =>
     inp.oninput = () => {
       const parts = inp.dataset.r.split(":");
-      state.active.log[parts[0]][Number(parts[1])].reps = inp.value;
+      state.active.log[parts[0]][Number(parts[1])].reps = fixDec(inp.value);
       save(LS.active, state.active);
     }
   );
@@ -822,6 +833,7 @@ function finishWorkout(day) {
       return {
         exId: e.id,
         name: { bg: e.name.bg || L(e.name), en: e.name.en || L(e.name) },
+        img: e.img, exdb: e.exdb, muscle: e.muscle,
         sets: e.sets,
         setsDone: arr.filter((s) => s.done).length,
         logs: arr.map((s) => ({ weight: s.weight, reps: s.reps, done: s.done })),
@@ -943,7 +955,7 @@ function renderPlateCalc() {
     </div>
     <div class="field">
       <label>${t().targetWeight} (${t().kg})</label>
-      <input id="plateWeight" type="number" step="0.5" min="0" inputmode="decimal" value="${plateCalc.weight}" />
+      <input id="plateWeight" type="text" inputmode="decimal" value="${plateCalc.weight}" />
     </div>
     <div class="plate-result">${resultHtml}</div>
     <div class="subtle" style="margin-top:10px">${plateCalc.mode === "bar" ? t().barbell : t().dumbbell}: ${fmtKg(base)} ${t().kg}</div>
@@ -954,7 +966,7 @@ function renderPlateCalc() {
     b.onclick = () => { plateCalc.mode = b.dataset.mode; renderPlateCalc(); }
   );
   const wInput = document.getElementById("plateWeight");
-  wInput.oninput = () => { plateCalc.weight = wInput.value === "" ? "" : Number(wInput.value); renderPlateCalc(); };
+  wInput.oninput = () => { plateCalc.weight = wInput.value === "" ? "" : num(wInput.value); renderPlateCalc(); };
   document.getElementById("openEquip").onclick = () => openEquipment();
 }
 
@@ -963,16 +975,16 @@ function renderEquipment() {
   const eq = state.equipment;
   const plateRows = (eq.plates || []).map((p, i) => `
     <div class="equip-row">
-      <input class="equip-kg" type="number" step="0.25" min="0" inputmode="decimal" value="${p.kg}" data-pk="${i}" placeholder="${t().kg}" />
+      <input class="equip-kg" type="text" inputmode="decimal" value="${p.kg}" data-pk="${i}" placeholder="${t().kg}" />
       <span class="equip-x">×</span>
-      <input class="equip-count" type="number" min="0" step="2" inputmode="numeric" value="${p.count}" data-pc="${i}" placeholder="${t().count}" />
+      <input class="equip-count" type="text" inputmode="numeric" value="${p.count}" data-pc="${i}" placeholder="${t().count}" />
       <button class="icon-btn" data-prm="${i}" title="${t().deleteExercise}">🗑</button>
     </div>`).join("");
   openModal(`
     <div class="modal-title">⚙️ ${t().equipment}</div>
     <div class="field-row">
-      <div class="field"><label>${t().barWeight} (${t().kg})</label><input id="eqBar" type="number" step="0.5" min="0" inputmode="decimal" value="${eq.bar}" /></div>
-      <div class="field"><label>${t().handleWeight} (${t().kg})</label><input id="eqHandle" type="number" step="0.5" min="0" inputmode="decimal" value="${eq.dumbbellHandle}" /></div>
+      <div class="field"><label>${t().barWeight} (${t().kg})</label><input id="eqBar" type="text" inputmode="decimal" value="${eq.bar}" /></div>
+      <div class="field"><label>${t().handleWeight} (${t().kg})</label><input id="eqHandle" type="text" inputmode="decimal" value="${eq.dumbbellHandle}" /></div>
     </div>
     <div class="modal-section-label">${t().plates} (${t().kg} × ${t().count})</div>
     <div class="subtle" style="margin-bottom:8px">${t().platesHint}</div>
@@ -985,13 +997,13 @@ function renderEquipment() {
   `);
   const collect = () => {
     const eqn = state.equipment;
-    eqn.bar = Number(document.getElementById("eqBar").value) || 0;
-    eqn.dumbbellHandle = Number(document.getElementById("eqHandle").value) || 0;
+    eqn.bar = num(document.getElementById("eqBar").value) || 0;
+    eqn.dumbbellHandle = num(document.getElementById("eqHandle").value) || 0;
     document.querySelectorAll("[data-pk]").forEach((inp) => {
-      const i = Number(inp.dataset.pk); if (eqn.plates[i]) eqn.plates[i].kg = Number(inp.value) || 0;
+      const i = Number(inp.dataset.pk); if (eqn.plates[i]) eqn.plates[i].kg = num(inp.value) || 0;
     });
     document.querySelectorAll("[data-pc]").forEach((inp) => {
-      const i = Number(inp.dataset.pc); if (eqn.plates[i]) eqn.plates[i].count = Math.max(0, Math.floor(Number(inp.value) || 0));
+      const i = Number(inp.dataset.pc); if (eqn.plates[i]) eqn.plates[i].count = Math.max(0, Math.floor(num(inp.value) || 0));
     });
   };
   document.getElementById("eqAdd").onclick = () => { collect(); state.equipment.plates.push({ kg: 0, count: 0 }); renderEquipment(); };
@@ -1109,6 +1121,7 @@ function openDayLog(date, list) {
         return `
           <div class="log-ex">
             <div class="log-ex-top">
+              <span class="log-ex-thumb">${sessionThumb(e)}</span>
               <span class="log-ex-name">${L(e.name)}</span>
               <span class="log-ex-sets ${full ? "full" : ""}">${e.setsDone}/${e.sets}</span>
             </div>
@@ -1166,9 +1179,9 @@ function renderSessionEdit() {
       body = `<div class="set-rows">` + e.logs.map((l, k) => `
         <div class="set-row ${l.done ? "done" : ""}">
           <button class="set-num" data-toggle="${i}:${k}">${k + 1}</button>
-          <input class="set-field set-weight" type="number" step="0.5" min="0" inputmode="decimal" placeholder="${t().kg}" value="${l.weight ?? ""}" data-w="${i}:${k}" />
+          <input class="set-field set-weight" type="text" inputmode="decimal" placeholder="${t().kg}" value="${l.weight ?? ""}" data-w="${i}:${k}" />
           <span class="set-mult">×</span>
-          <input class="set-field set-reps" type="number" min="0" inputmode="numeric" placeholder="${t().reps}" value="${l.reps ?? ""}" data-r="${i}:${k}" />
+          <input class="set-field set-reps" type="text" inputmode="numeric" placeholder="${t().reps}" value="${l.reps ?? ""}" data-r="${i}:${k}" />
         </div>`).join("") + `</div>`;
     } else {
       const dots = Array.from({ length: Number(e.sets) || 0 }, (_, k) =>
@@ -1214,13 +1227,13 @@ function renderSessionEdit() {
   document.querySelectorAll(".modal [data-w]").forEach((inp) =>
     inp.oninput = () => {
       const parts = inp.dataset.w.split(":").map(Number);
-      sessEdit.data.exercises[parts[0]].logs[parts[1]].weight = inp.value;
+      sessEdit.data.exercises[parts[0]].logs[parts[1]].weight = fixDec(inp.value);
     }
   );
   document.querySelectorAll(".modal [data-r]").forEach((inp) =>
     inp.oninput = () => {
       const parts = inp.dataset.r.split(":").map(Number);
-      sessEdit.data.exercises[parts[0]].logs[parts[1]].reps = inp.value;
+      sessEdit.data.exercises[parts[0]].logs[parts[1]].reps = fixDec(inp.value);
     }
   );
   document.querySelectorAll("[data-rm-ex]").forEach((b) =>
