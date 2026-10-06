@@ -240,7 +240,17 @@ body {
 
 /* tools row (plate calc / equipment) */
 .tools-row { display: flex; gap: 10px; margin-top: 18px; }
-.tools-row .btn-ghost { flex: 1; }
+.tools-row .btn-ghost, .backup-row .btn-ghost {
+  flex: 1; min-width: 0; margin-top: 0;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 14px;
+  padding: 13px 10px; font-size: 0.9rem; font-weight: 600;
+  white-space: nowrap;
+}
+.tools-row .btn-ghost:active, .backup-row .btn-ghost:active {
+  background: var(--primary-soft); border-color: var(--primary);
+}
 
 /* segmented control */
 .seg { display: flex; gap: 6px; background: var(--surface-2); border-radius: 12px; padding: 4px; margin-bottom: 12px; }
@@ -572,8 +582,7 @@ body.reordering { user-select: none; cursor: grabbing; }
   padding: 13px; font-weight: 700; cursor: pointer; margin-top: 4px; margin-bottom: 12px;
 }
 
-.backup-row { display: flex; gap: 10px; margin-top: 22px; }
-.backup-row .btn-ghost { flex: 1; min-width: 0; margin-top: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 10px; font-size: 0.92rem; white-space: nowrap; }
+.backup-row { display: flex; gap: 10px; margin-top: 12px; }
 .ex-list.preview .set-dot { opacity: 0.4; pointer-events: none; }
 .ex-list.preview .ex-check { opacity: 0.3; pointer-events: none; }
 .backup-hint { text-align: center; margin-top: 8px; font-size: 0.8rem; }
