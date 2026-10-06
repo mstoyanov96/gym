@@ -503,6 +503,13 @@ body.reordering { user-select: none; cursor: grabbing; }
   object-fit: contain; border-radius: 10px;
   cursor: zoom-out;
 }
+.lb-count {
+  position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+  left: 50%; transform: translateX(-50%);
+  color: #fff; font-size: 0.85rem; font-weight: 700;
+  background: rgba(0, 0, 0, 0.5); padding: 4px 12px; border-radius: 999px;
+}
+.lb-count:empty { display: none; }
 .muscle-tag {
   display: inline-block; background: var(--primary-soft); color: var(--primary-dark);
   padding: 4px 12px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; margin-bottom: 10px;

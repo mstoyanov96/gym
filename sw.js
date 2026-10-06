@@ -1,5 +1,8 @@
 // Simple offline cache. Bump CACHE to force an update when files change.
-const CACHE = "gym-v42";
+const CACHE = "gym-v43";
+// Images live in a separate, unversioned cache so they survive app updates
+// (bumping CACHE must not wipe already-downloaded exercise photos).
+const IMG_CACHE = "gym-img";
 const ASSETS = [
   "./",
   "./index.html",
@@ -31,7 +34,7 @@ self.addEventListener("message", (e) => {
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== CACHE && k !== IMG_CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
@@ -49,7 +52,7 @@ self.addEventListener("fetch", (e) => {
         cached ||
         fetch(e.request).then((res) => {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+          caches.open(IMG_CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
           return res;
         }).catch(() => cached)
       )

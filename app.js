@@ -962,7 +962,10 @@ function openExerciseInfo(e) {
     <button class="btn-ghost" id="modalClose" style="margin-top:16px">${t().close}</button>
   `);
   document.querySelectorAll(".modal-gallery img").forEach((img) =>
-    img.addEventListener("click", () => openImageLightbox(img.src))
+    img.addEventListener("click", () => {
+      const list = [...document.querySelectorAll(".modal-gallery img")].map((i) => i.src);
+      openImageLightbox(list, list.indexOf(img.src));
+    })
   );
 }
 
@@ -1421,18 +1424,39 @@ function closeModal() { if (modalOpen) history.back(); }
 function hideModal() { modalOpen = false; if (backdrop) backdrop.classList.remove("open"); }
 
 // ---------- Image lightbox ----------
-let lightboxEl, lightboxOpen = false;
-function openImageLightbox(src) {
+let lightboxEl, lightboxOpen = false, lbList = [], lbIndex = 0, lbSwiped = false;
+function openImageLightbox(list, index) {
+  lbList = list.filter(Boolean);
+  lbIndex = Math.max(0, index);
   if (!lightboxEl) {
     lightboxEl = document.createElement("div");
     lightboxEl.className = "lightbox";
-    lightboxEl.innerHTML = `<img alt="">`;
+    lightboxEl.innerHTML = `<img alt=""><div class="lb-count"></div>`;
     document.body.appendChild(lightboxEl);
-    lightboxEl.addEventListener("click", closeLightbox);
+    let sx = 0, sy = 0;
+    lightboxEl.addEventListener("touchstart", (ev) => {
+      const t = ev.touches[0]; sx = t.clientX; sy = t.clientY; lbSwiped = false;
+    }, { passive: true });
+    lightboxEl.addEventListener("touchend", (ev) => {
+      const t = ev.changedTouches[0];
+      const dx = t.clientX - sx, dy = t.clientY - sy;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) { lbSwiped = true; navLightbox(dx < 0 ? 1 : -1); }
+    });
+    lightboxEl.addEventListener("click", () => { if (lbSwiped) { lbSwiped = false; return; } closeLightbox(); });
   }
-  lightboxEl.querySelector("img").src = src;
+  showLightboxImage();
   lightboxEl.classList.add("open");
   if (!lightboxOpen) { lightboxOpen = true; history.pushState({ layer: "lightbox" }, ""); }
+}
+function showLightboxImage() {
+  lightboxEl.querySelector("img").src = lbList[lbIndex] || "";
+  const count = lightboxEl.querySelector(".lb-count");
+  count.textContent = lbList.length > 1 ? `${lbIndex + 1} / ${lbList.length}` : "";
+}
+function navLightbox(dir) {
+  if (lbList.length < 2) return;
+  lbIndex = (lbIndex + dir + lbList.length) % lbList.length;
+  showLightboxImage();
 }
 function closeLightbox() { if (lightboxOpen) history.back(); }
 function hideLightbox() { lightboxOpen = false; if (lightboxEl) lightboxEl.classList.remove("open"); }
@@ -1530,3 +1554,21 @@ if ("serviceWorker" in navigator) {
 }
 
 render();
+
+// Warm the image cache in the background so opening a workout shows photos
+// instantly. The service worker stores them in a persistent cache.
+function prefetchExerciseImages() {
+  const seen = new Set();
+  (state.program.days || []).forEach((d) =>
+    (d.exercises || []).forEach((e) =>
+      exImages(e).forEach((u) => {
+        if (seen.has(u)) return;
+        seen.add(u);
+        const im = new Image();
+        im.src = u;
+      })
+    )
+  );
+}
+if ("requestIdleCallback" in window) requestIdleCallback(prefetchExerciseImages);
+else setTimeout(prefetchExerciseImages, 1200);
