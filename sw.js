@@ -1,5 +1,5 @@
 // Simple offline cache. Bump CACHE to force an update when files change.
-const CACHE = "gym-v20";
+const CACHE = "gym-v21";
 const ASSETS = [
   "./",
   "./index.html",
@@ -14,8 +14,13 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (e) => {
-  // Wait for the user to confirm the update (via SKIP_WAITING) before activating.
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
+  // Precache with cache:"reload" so we always pull the freshly deployed files,
+  // bypassing the browser/CDN HTTP cache (which otherwise serves stale app.js).
+  e.waitUntil(
+    caches.open(CACHE).then((c) =>
+      c.addAll(ASSETS.map((u) => new Request(u, { cache: "reload" })))
+    )
+  );
 });
 
 // The page asks us to activate the freshly installed version.
@@ -52,12 +57,16 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Network-first for app files: always try fresh when online, fall back to cache offline.
+  // App files: serve from the versioned cache (freshly precached at install,
+  // so it matches the deployed release), and refresh it in the background.
   e.respondWith(
-    fetch(e.request).then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-      return res;
-    }).catch(() => caches.match(e.request))
+    caches.match(e.request).then((cached) => {
+      const fromNet = fetch(e.request).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        return res;
+      }).catch(() => cached);
+      return cached || fromNet;
+    })
   );
 });
