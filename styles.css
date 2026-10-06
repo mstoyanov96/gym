@@ -485,8 +485,24 @@ body.reordering { user-select: none; cursor: grabbing; }
 .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
 .modal-actions .btn-primary, .modal-actions .btn-ghost { flex: 1; }
 .modal-gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-.modal-gallery img { width: 100%; border-radius: 12px; display: block; background: var(--surface-2); aspect-ratio: 4/3; object-fit: cover; }
+.modal-gallery img { width: 100%; border-radius: 12px; display: block; background: var(--surface-2); aspect-ratio: 4/3; object-fit: cover; cursor: zoom-in; }
 .modal-gallery img:only-child { grid-column: 1 / -1; aspect-ratio: 16/10; }
+
+/* Image lightbox */
+.lightbox {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.92);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.lightbox.open { opacity: 1; pointer-events: auto; }
+.lightbox img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; border-radius: 10px;
+  cursor: zoom-out;
+}
 .muscle-tag {
   display: inline-block; background: var(--primary-soft); color: var(--primary-dark);
   padding: 4px 12px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; margin-bottom: 10px;

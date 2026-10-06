@@ -961,6 +961,9 @@ function openExerciseInfo(e) {
     <div class="modal-img">${MUSCLE_SVG(e.muscle)}</div>
     <button class="btn-ghost" id="modalClose" style="margin-top:16px">${t().close}</button>
   `);
+  document.querySelectorAll(".modal-gallery img").forEach((img) =>
+    img.addEventListener("click", () => openImageLightbox(img.src))
+  );
 }
 
 // ============================================================
@@ -1417,6 +1420,23 @@ function closeModal() { if (modalOpen) history.back(); }
 // Actually hide the modal UI (called from the back-navigation handler).
 function hideModal() { modalOpen = false; if (backdrop) backdrop.classList.remove("open"); }
 
+// ---------- Image lightbox ----------
+let lightboxEl, lightboxOpen = false;
+function openImageLightbox(src) {
+  if (!lightboxEl) {
+    lightboxEl = document.createElement("div");
+    lightboxEl.className = "lightbox";
+    lightboxEl.innerHTML = `<img alt="">`;
+    document.body.appendChild(lightboxEl);
+    lightboxEl.addEventListener("click", closeLightbox);
+  }
+  lightboxEl.querySelector("img").src = src;
+  lightboxEl.classList.add("open");
+  if (!lightboxOpen) { lightboxOpen = true; history.pushState({ layer: "lightbox" }, ""); }
+}
+function closeLightbox() { if (lightboxOpen) history.back(); }
+function hideLightbox() { lightboxOpen = false; if (lightboxEl) lightboxEl.classList.remove("open"); }
+
 // ============================================================
 //  GLOBAL WIRING
 // ============================================================
@@ -1441,6 +1461,7 @@ document.querySelectorAll(".tab").forEach((b) =>
 //  pops exactly one layer. At the base list, Back exits the app.
 // ============================================================
 window.addEventListener("popstate", () => {
+  if (lightboxOpen) { hideLightbox(); return; }
   if (modalOpen) { hideModal(); return; }
   if (state.tab === "workouts" && state.view.screen === "detail") {
     state.view.screen = "list";
