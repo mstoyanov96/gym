@@ -1096,22 +1096,34 @@ function openDayLog(date, list) {
       const total = s.exercises.length;
       const dur = fmtDuration(s.durationMin);
       const exLines = s.exercises.map((e) => {
-        let extra = "";
+        let chips = "";
         if (e.logs && e.logs.length) {
-          const done = e.logs.filter((l) => l.done && (l.weight || l.reps));
-          if (done.length) extra = " · " + done.map((l) => `${l.weight || "–"}${t().kg}×${l.reps || "–"}`).join(", ");
+          const doneSets = e.logs.filter((l) => l.done && (l.weight || l.reps));
+          if (doneSets.length) {
+            chips = `<div class="log-set-chips">` + doneSets.map((l) =>
+              `<span class="log-set-chip">${l.weight || "–"}${t().kg}<span class="log-set-x">×</span>${l.reps || "–"}</span>`
+            ).join("") + `</div>`;
+          }
         }
-        return `<div class="log-detail">• ${L(e.name)} — ${e.setsDone}/${e.sets} ${t().sets.toLowerCase()}${extra}</div>`;
+        const full = e.setsDone >= e.sets;
+        return `
+          <div class="log-ex">
+            <div class="log-ex-top">
+              <span class="log-ex-name">${L(e.name)}</span>
+              <span class="log-ex-sets ${full ? "full" : ""}">${e.setsDone}/${e.sets}</span>
+            </div>
+            ${chips}
+          </div>`;
       }).join("");
       return `
-        <div class="log-item" style="flex-direction:column;align-items:stretch;gap:4px">
-          <div style="display:flex;align-items:center;gap:10px">
+        <div class="log-card">
+          <div class="log-card-head">
             <span class="log-emoji">${s.icon}</span>
             <span class="log-name">${L(s.dayName)}</span>
-            <span class="log-detail" style="margin-left:auto">${done}/${total}</span>
+            <span class="log-badge">${done}/${total}</span>
           </div>
-          ${dur ? `<div class="log-detail">⏱ ${t().duration}: ${dur}</div>` : ""}
-          ${exLines}
+          ${dur ? `<div class="log-stats"><span class="log-stat">⏱ ${dur}</span></div>` : ""}
+          <div class="log-ex-list">${exLines}</div>
           <div class="log-actions">
             <button class="btn-ghost btn-sm" data-edit-sess="${idx}">✎ ${t().edit}</button>
             <button class="btn-ghost btn-sm btn-danger" data-del-sess="${idx}">🗑 ${t().deleteExercise}</button>
