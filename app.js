@@ -489,38 +489,41 @@ function exerciseEditCard(e) {
     `<option value="${m}" ${m === e.muscle ? "selected" : ""}>${t().muscles[m]}</option>`
   ).join("");
   return `
-    <div class="ex-card" data-edit="${e.id}">
-      <div class="ex-edit-head">
+    <details class="ex-card ex-edit-card" data-edit="${e.id}">
+      <summary class="ex-edit-head">
         <span class="ex-drag" data-drag-handle title="${t().dragToReorder}">⠿</span>
         <span class="ex-edit-thumb">${thumb(e)}</span>
         <span class="ex-edit-name">${escapeHtml(L(e.name))}</span>
+        <span class="ex-edit-caret">▸</span>
+      </summary>
+      <div class="ex-edit-body">
+        <div class="field">
+          <label>${t().name}</label>
+          <input data-f="name" value="${escapeHtml(L(e.name))}" />
+        </div>
+        <div class="field-row">
+          <div class="field"><label>${t().sets}</label><input data-f="sets" type="number" min="1" value="${e.sets}" /></div>
+          <div class="field"><label>${t().reps}</label><input data-f="reps" value="${escapeHtml(L(e.reps))}" /></div>
+        </div>
+        <div class="field">
+          <label>${t().targetMuscle}</label>
+          <select data-f="muscle">${muscleOpts}</select>
+        </div>
+        <div class="field">
+          <label>${t().notes}</label>
+          <input data-f="notes" value="${escapeHtml(L(e.notes))}" />
+        </div>
+        <details class="field ex-edit-steps">
+          <summary>${t().instructions}</summary>
+          <textarea data-f="steps" rows="4">${escapeHtml(((e.steps && e.steps[state.lang]) || []).join("\n"))}</textarea>
+        </details>
+        <div class="field">
+          <label>${t().imageUrl}</label>
+          <input data-f="img" value="${escapeHtml(e.img || "")}" placeholder="https://..." />
+        </div>
+        <button class="btn-ghost btn-danger" data-del="${e.id}">🗑 ${t().deleteExercise}</button>
       </div>
-      <div class="field">
-        <label>${t().name}</label>
-        <input data-f="name" value="${escapeHtml(L(e.name))}" />
-      </div>
-      <div class="field-row">
-        <div class="field"><label>${t().sets}</label><input data-f="sets" type="number" min="1" value="${e.sets}" /></div>
-        <div class="field"><label>${t().reps}</label><input data-f="reps" value="${escapeHtml(L(e.reps))}" /></div>
-      </div>
-      <div class="field">
-        <label>${t().targetMuscle}</label>
-        <select data-f="muscle">${muscleOpts}</select>
-      </div>
-      <div class="field">
-        <label>${t().notes}</label>
-        <input data-f="notes" value="${escapeHtml(L(e.notes))}" />
-      </div>
-      <details class="field ex-edit-steps">
-        <summary>${t().instructions}</summary>
-        <textarea data-f="steps" rows="4">${escapeHtml(((e.steps && e.steps[state.lang]) || []).join("\n"))}</textarea>
-      </details>
-      <div class="field">
-        <label>${t().imageUrl}</label>
-        <input data-f="img" value="${escapeHtml(e.img || "")}" placeholder="https://..." />
-      </div>
-      <button class="btn-ghost btn-danger" data-del="${e.id}">🗑 ${t().deleteExercise}</button>
-    </div>`;
+    </details>`;
 }
 
 function escapeHtml(s) {
@@ -675,6 +678,8 @@ function enableDragReorder(day) {
 
   viewEl.querySelectorAll("[data-drag-handle]").forEach((handle) => {
     const card = handle.closest(".ex-card[data-edit]");
+    // The handle lives inside the <summary>; dragging it must not toggle the card.
+    handle.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); });
     handle.addEventListener("pointerdown", (ev) => {
       ev.preventDefault();
       dragEl = card;

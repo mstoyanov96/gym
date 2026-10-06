@@ -248,7 +248,13 @@ body {
 .ex-search-section:first-child { margin-top: 0; }
 
 /* edit-mode reorder header */
-.ex-edit-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ex-edit-card { padding: 0; overflow: hidden; }
+.ex-edit-card > summary { margin: 0; padding: 12px 14px; cursor: pointer; list-style: none; }
+.ex-edit-card > summary::-webkit-details-marker { display: none; }
+.ex-edit-head { display: flex; align-items: center; gap: 10px; }
+.ex-edit-caret { margin-left: auto; flex-shrink: 0; color: var(--text-soft); font-size: 0.9rem; transition: transform .15s ease; }
+.ex-edit-card[open] > summary .ex-edit-caret { transform: rotate(90deg); }
+.ex-edit-body { padding: 2px 14px 14px; }
 .ex-edit-thumb {
   width: 38px; height: 38px; border-radius: 9px; overflow: hidden; flex-shrink: 0;
   background: var(--surface-2); display: grid; place-items: center;
