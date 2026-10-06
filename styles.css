@@ -241,6 +241,23 @@ body {
   flex-shrink: 0; background: var(--primary-soft); color: var(--primary-dark);
   border: none; border-radius: 10px; padding: 9px 12px; font-weight: 700; font-size: 0.82rem; cursor: pointer;
 }
+.ex-search-section {
+  font-size: 0.74rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-soft); margin: 6px 2px 2px;
+}
+.ex-search-section:first-child { margin-top: 0; }
+
+/* edit-mode reorder header */
+.ex-edit-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ex-edit-name { font-weight: 800; font-size: 0.95rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-drag {
+  flex-shrink: 0; touch-action: none; cursor: grab; user-select: none;
+  font-size: 1.3rem; line-height: 1; color: var(--text-soft);
+  padding: 4px 8px; border-radius: 9px; background: var(--surface-2);
+}
+.ex-drag:active { cursor: grabbing; }
+.ex-card.dragging { opacity: 0.85; box-shadow: 0 8px 22px rgba(0,0,0,0.18); transform: scale(1.01); }
+body.reordering { user-select: none; }
 
 /* ---------- Buttons ---------- */
 .btn-primary {

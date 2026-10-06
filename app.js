@@ -35,7 +35,7 @@ if (state.active && !state.active.log) {
       const cnt = (state.active.sets && state.active.sets[e.id]) || 0;
       log[e.id] = Array.from({ length: Number(e.sets) || 0 }, (_, i) => ({ weight: "", reps: "", done: i < cnt }));
     });
-    state.active = { dayId: state.active.dayId, started: state.active.started, log };
+    state.active = { dayId: state.active.dayId, started: state.active.started, startedAt: state.active.startedAt || null, log };
     save(LS.active, state.active);
   } else {
     state.active = null; localStorage.removeItem(LS.active);
@@ -59,6 +59,12 @@ function L(obj) {
 function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function fmtDuration(min) {
+  if (min == null || min < 0 || isNaN(min)) return "";
+  if (min < 60) return `${min} ${t().minShort}`;
+  const h = Math.floor(min / 60), m = min % 60;
+  return m ? `${h} ${t().hrShort} ${m} ${t().minShort}` : `${h} ${t().hrShort}`;
 }
 
 // ---------- Toast ----------
@@ -313,13 +319,14 @@ function startActive(day) {
       return { weight: p ? (p.weight ?? "") : "", reps: p ? (p.reps ?? "") : "", done: false };
     });
   });
-  state.active = { dayId: day.id, started: todayStr(), log };
+  state.active = { dayId: day.id, started: todayStr(), startedAt: Date.now(), log };
   save(LS.active, state.active);
 }
 
 // ---------- Exercise database search (free-exercise-db) ----------
 const EXDB_INDEX = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json";
 let exDbCache = null;
+let exDbFailed = false;
 const DB_MUSCLE_MAP = {
   chest: "chest",
   "middle back": "back", lats: "back", "lower back": "back", traps: "back",
@@ -343,44 +350,118 @@ function openExerciseSearch(day) {
   const results = document.getElementById("exSearchResults");
   const run = () => renderSearchResults(day, input.value, results);
   input.oninput = run;
-  if (exDbCache) { run(); return; }
-  results.innerHTML = `<div class="subtle" style="text-align:center;padding:20px">${t().loading}</div>`;
+  run();                                  // show the user's own exercises right away
+  if (exDbCache || exDbFailed) return;
   fetch(EXDB_INDEX)
     .then((r) => r.json())
-    .then((data) => { exDbCache = data; run(); })
-    .catch(() => { results.innerHTML = `<div class="subtle" style="text-align:center;padding:20px">${t().searchError}</div>`; });
+    .then((data) => { exDbCache = data; exDbFailed = false; run(); })
+    .catch(() => { exDbFailed = true; run(); });
+}
+
+// The user's own exercises across all days, de-duplicated by name.
+function ownExercises() {
+  const seen = new Set();
+  const out = [];
+  state.program.days.forEach((d) => d.exercises.forEach((e) => {
+    const key = L(e.name).toLowerCase().trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push(e);
+  }));
+  return out;
 }
 
 function renderSearchResults(day, q, container) {
-  if (!exDbCache) return;
   q = String(q || "").trim().toLowerCase();
-  let list = exDbCache;
-  if (q) {
-    const terms = q.split(/\s+/);
-    list = exDbCache.filter((it) => {
-      const hay = `${it.name} ${(it.primaryMuscles || []).join(" ")} ${it.equipment || ""}`.toLowerCase();
-      return terms.every((tm) => hay.includes(tm));
-    });
+  const terms = q ? q.split(/\s+/) : [];
+  const match = (hay) => terms.every((tm) => hay.includes(tm));
+
+  // 1) The user's own exercises (so an exercise added to one day is reusable in another).
+  const own = ownExercises().filter((e) => {
+    if (!q) return true;
+    const hay = `${L(e.name)} ${t().muscles[e.muscle] || ""} ${e.muscle}`.toLowerCase();
+    return match(hay);
+  }).slice(0, 20);
+
+  // 2) The external exercise library.
+  let db = [];
+  if (exDbCache) {
+    const base = q
+      ? exDbCache.filter((it) => match(`${it.name} ${(it.primaryMuscles || []).join(" ")} ${it.equipment || ""}`.toLowerCase()))
+      : exDbCache;
+    db = base.slice(0, 40);
   }
-  const top = list.slice(0, 40);
-  if (!top.length) { container.innerHTML = `<div class="subtle" style="text-align:center;padding:20px">${t().noResults}</div>`; return; }
-  container.innerHTML = top.map((it, idx) => {
-    const img = (it.images && it.images[0])
-      ? `<img src="${EXDB_BASE + it.images[0]}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : "";
-    const muscles = (it.primaryMuscles || []).join(", ");
-    return `
-      <div class="ex-search-item">
-        <div class="ex-search-thumb">${img}</div>
-        <div class="ex-search-info">
-          <div class="ex-search-name">${escapeHtml(it.name)}</div>
-          <div class="ex-search-meta">${escapeHtml(muscles)}${it.equipment ? " · " + escapeHtml(it.equipment) : ""}</div>
-        </div>
-        <button class="ex-search-add" data-add="${idx}">+ ${t().add}</button>
-      </div>`;
-  }).join("");
-  container.querySelectorAll("[data-add]").forEach((btn) =>
-    btn.onclick = () => addExerciseFromDb(day, top[Number(btn.dataset.add)])
+
+  const subtle = (txt) => `<div class="subtle" style="text-align:center;padding:16px">${txt}</div>`;
+  let html = "";
+
+  if (own.length) {
+    html += `<div class="ex-search-section">${t().myExercises}</div>`;
+    html += own.map((e, idx) => {
+      const img = exImages(e)[0]
+        ? `<img src="${exImages(e)[0]}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : "";
+      return `
+        <div class="ex-search-item">
+          <div class="ex-search-thumb">${img || MUSCLE_SVG(e.muscle)}</div>
+          <div class="ex-search-info">
+            <div class="ex-search-name">${escapeHtml(L(e.name))}</div>
+            <div class="ex-search-meta">${escapeHtml(t().muscles[e.muscle] || "")}</div>
+          </div>
+          <button class="ex-search-add" data-add-own="${idx}">+ ${t().add}</button>
+        </div>`;
+    }).join("");
+  }
+
+  html += `<div class="ex-search-section">${t().exerciseLibrary}</div>`;
+  if (exDbCache) {
+    html += db.length
+      ? db.map((it, idx) => {
+          const img = (it.images && it.images[0])
+            ? `<img src="${EXDB_BASE + it.images[0]}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : "";
+          const muscles = (it.primaryMuscles || []).join(", ");
+          return `
+            <div class="ex-search-item">
+              <div class="ex-search-thumb">${img}</div>
+              <div class="ex-search-info">
+                <div class="ex-search-name">${escapeHtml(it.name)}</div>
+                <div class="ex-search-meta">${escapeHtml(muscles)}${it.equipment ? " · " + escapeHtml(it.equipment) : ""}</div>
+              </div>
+              <button class="ex-search-add" data-add="${idx}">+ ${t().add}</button>
+            </div>`;
+        }).join("")
+      : subtle(t().noResults);
+  } else if (exDbFailed) {
+    html += subtle(t().searchError);
+  } else {
+    html += subtle(t().loading);
+  }
+
+  container.innerHTML = html;
+  container.querySelectorAll("[data-add-own]").forEach((btn) =>
+    btn.onclick = () => addExerciseCopy(day, own[Number(btn.dataset.addOwn)])
   );
+  container.querySelectorAll("[data-add]").forEach((btn) =>
+    btn.onclick = () => addExerciseFromDb(day, db[Number(btn.dataset.add)])
+  );
+}
+
+function addExerciseCopy(day, e) {
+  if (!e) return;
+  collectEdits(day);  // keep any unsaved edits that are open behind the modal
+  day.exercises.push({
+    id: "x" + Date.now(),
+    muscle: e.muscle,
+    exdb: e.exdb || "",
+    name: clone(e.name),
+    sets: e.sets, reps: e.reps,
+    notes: clone(e.notes || { bg: "", en: "" }),
+    steps: clone(e.steps || { bg: [], en: [] }),
+    img: e.img || "",
+  });
+  save(LS.program, state.program);
+  closeModal();
+  toast(t().exerciseAdded);
+  render();
 }
 
 function addExerciseFromDb(day, item) {
@@ -409,6 +490,10 @@ function exerciseEditCard(e) {
   ).join("");
   return `
     <div class="ex-card" data-edit="${e.id}">
+      <div class="ex-edit-head">
+        <span class="ex-drag" data-drag-handle title="${t().dragToReorder}">⠿</span>
+        <span class="ex-edit-name">${escapeHtml(L(e.name))}</span>
+      </div>
       <div class="field">
         <label>${t().name}</label>
         <input data-f="name" value="${escapeHtml(L(e.name))}" />
@@ -481,6 +566,7 @@ function wireDetail(day, started) {
         }
       }
     );
+    enableDragReorder(day);
     return;
   }
 
@@ -535,6 +621,70 @@ function wireDetail(day, started) {
 
 function getEx(day, id) { return day.exercises.find((e) => e.id === id); }
 
+// Touch/mouse drag-and-drop reordering of exercise cards in edit mode.
+function enableDragReorder(day) {
+  let dragEl = null, autoScroll = 0, raf = 0;
+
+  const cardAtY = (y) =>
+    [...viewEl.querySelectorAll(".ex-card[data-edit]")].find((c) => {
+      if (c === dragEl) return false;
+      const r = c.getBoundingClientRect();
+      return y >= r.top && y <= r.bottom;
+    });
+
+  const tick = () => {
+    if (autoScroll) { window.scrollBy(0, autoScroll); raf = requestAnimationFrame(tick); }
+    else raf = 0;
+  };
+
+  viewEl.querySelectorAll("[data-drag-handle]").forEach((handle) => {
+    const card = handle.closest(".ex-card[data-edit]");
+    handle.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      dragEl = card;
+      card.classList.add("dragging");
+      document.body.classList.add("reordering");
+
+      const move = (e) => {
+        const y = e.clientY;
+        const other = cardAtY(y);
+        if (other) {
+          const r = other.getBoundingClientRect();
+          if (y < r.top + r.height / 2) other.parentNode.insertBefore(dragEl, other);
+          else other.parentNode.insertBefore(dragEl, other.nextSibling);
+        }
+        // Auto-scroll when dragging near the viewport edges.
+        const margin = 70;
+        if (y < margin) autoScroll = -Math.ceil((margin - y) / 6);
+        else if (y > window.innerHeight - margin) autoScroll = Math.ceil((y - (window.innerHeight - margin)) / 6);
+        else autoScroll = 0;
+        if (autoScroll && !raf) raf = requestAnimationFrame(tick);
+      };
+      const up = () => {
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        document.removeEventListener("pointercancel", up);
+        autoScroll = 0;
+        card.classList.remove("dragging");
+        document.body.classList.remove("reordering");
+        commitOrder(day);
+        dragEl = null;
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+      document.addEventListener("pointercancel", up);
+    });
+  });
+}
+
+function commitOrder(day) {
+  collectEdits(day);  // preserve any in-progress field edits before re-rendering
+  const order = [...viewEl.querySelectorAll(".ex-card[data-edit]")].map((c) => c.dataset.edit);
+  day.exercises.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  save(LS.program, state.program);
+  render();
+}
+
 function collectEdits(day) {
   viewEl.querySelectorAll("[data-edit]").forEach((card) => {
     const ex = getEx(day, card.dataset.edit);
@@ -570,11 +720,16 @@ function finishWorkout(day) {
   if (!anyDone) { toast(state.lang === "bg" ? "Отбележи поне едно упражнение" : "Mark at least one exercise"); return; }
   if (!confirm(t().finishConfirm)) return;
 
+  const endedAt = Date.now();
+  const durationMin = active.startedAt ? Math.max(0, Math.round((endedAt - active.startedAt) / 60000)) : null;
   const session = {
     date: todayStr(),
     dayId: day.id,
     dayName: { bg: day.name.bg, en: day.name.en },
     icon: day.icon,
+    startedAt: active.startedAt || null,
+    endedAt,
+    durationMin,
     exercises: day.exercises.map((e) => {
       const arr = active.log[e.id] || [];
       return {
@@ -667,7 +822,10 @@ function renderCalendar() {
   const dow = t().weekdays.map((w) => `<div class="cal-dow">${w}</div>`).join("");
   const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
   const monthDates = Object.keys(byDate).filter((d) => d.startsWith(monthKey)).sort();
-  const monthCount = state.sessions.filter((s) => s.date.startsWith(monthKey)).length;
+  const monthSessions = state.sessions.filter((s) => s.date.startsWith(monthKey));
+  const monthCount = monthSessions.length;
+  const durs = monthSessions.map((s) => s.durationMin).filter((x) => typeof x === "number" && x >= 0);
+  const avgMin = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null;
 
   const overview = monthDates.length
     ? monthDates.map((d) => {
@@ -694,7 +852,7 @@ function renderCalendar() {
       <div class="cal-month">${t().months[month]} ${year}</div>
       <button class="cal-nav" id="calNext">›</button>
     </div>
-    <div class="subtle" style="text-align:center;margin-bottom:14px">${monthCount} ${t().workoutsCount}</div>
+    <div class="subtle" style="text-align:center;margin-bottom:14px">${monthCount} ${t().workoutsCount}${avgMin != null ? ` · ${t().avgTime}: ${fmtDuration(avgMin)}` : ""}</div>
     <div class="cal-grid">${dow}${cells}</div>
     <div class="section-title" style="margin-top:22px">${t().loggedWorkouts}</div>
     <div class="cal-list">${overview}</div>
@@ -721,6 +879,7 @@ function openDayLog(date, list) {
       const idx = state.sessions.indexOf(s);
       const done = s.exercises.filter((e) => e.setsDone > 0).length;
       const total = s.exercises.length;
+      const dur = fmtDuration(s.durationMin);
       const exLines = s.exercises.map((e) => {
         let extra = "";
         if (e.logs && e.logs.length) {
@@ -736,6 +895,7 @@ function openDayLog(date, list) {
             <span class="log-name">${L(s.dayName)}</span>
             <span class="log-detail" style="margin-left:auto">${done}/${total}</span>
           </div>
+          ${dur ? `<div class="log-detail">⏱ ${t().duration}: ${dur}</div>` : ""}
           ${exLines}
           <div class="log-actions">
             <button class="btn-ghost btn-sm" data-edit-sess="${idx}">✎ ${t().edit}</button>
