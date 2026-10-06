@@ -42,6 +42,8 @@ function applyTheme(key) {
   r.setProperty("--primary-dark", th.dark);
   r.setProperty("--primary-soft", th.soft);
   r.setProperty("--primary-light", th.light);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", th.primary);
 }
 
 const state = {
