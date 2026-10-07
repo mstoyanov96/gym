@@ -1580,14 +1580,20 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").then((reg) => {
       swReg = reg;
       reg.update();
+      // Apply a freshly installed version automatically, unless a workout is in
+      // progress — then show the banner so we don't reload mid-set.
+      const applyUpdate = () => {
+        if (state && state.active) { showUpdateBanner(reg); return; }
+        if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+      };
       const watch = (sw) => {
         if (!sw) return;
         sw.addEventListener("statechange", () => {
-          if (sw.state === "installed" && navigator.serviceWorker.controller) showUpdateBanner(reg);
+          if (sw.state === "installed" && navigator.serviceWorker.controller) applyUpdate();
         });
       };
       // A newer version was already downloaded and is waiting, or is installing right now.
-      if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg);
+      if (reg.waiting && navigator.serviceWorker.controller) applyUpdate();
       watch(reg.installing);
       reg.addEventListener("updatefound", () => watch(reg.installing));
 
