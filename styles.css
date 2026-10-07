@@ -106,21 +106,20 @@ body {
 /* ---------- Stat strip ---------- */
 .stats {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   margin-bottom: 8px;
 }
 .stat {
   flex: 1;
-  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px 6px;
+  padding: 16px 10px;
   text-align: center;
   box-shadow: var(--shadow);
 }
-.stat-num { font-size: 1.3rem; font-weight: 800; color: var(--primary); line-height: 1.1; }
-.stat-label { font-size: 0.68rem; color: var(--text-soft); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+.stat-num { font-size: 1.5rem; font-weight: 800; color: var(--primary); line-height: 1; }
+.stat-label { font-size: 0.72rem; color: var(--text-soft); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
 
 /* ---------- Day cards ---------- */
 .day-card {
