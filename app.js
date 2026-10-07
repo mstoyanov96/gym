@@ -247,6 +247,9 @@ function renderDetail() {
   const doneSets = day.exercises.reduce((a, e) => a + Math.min(doneCountFor(active, e), setCount(e)), 0);
   const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
 
+  const timed = state.sessions.filter((s) => s.dayId === day.id && typeof s.durationMin === "number" && s.durationMin >= 0);
+  const dAvg = timed.length ? Math.round(timed.reduce((a, s) => a + s.durationMin, 0) / timed.length) : null;
+
   let html = `
     <div class="detail-head">
       <button class="btn-back" id="btnBack">‹ ${t().back}</button>
@@ -254,6 +257,7 @@ function renderDetail() {
     </div>
     <div class="detail-title">${day.icon} ${L(day.name)}</div>
     <div class="detail-focus">${L(day.focus)}</div>
+    ${!editing && dAvg != null ? `<button class="detail-time" id="detailTime">⏱ ${t().avgTime.toLowerCase()} ${fmtDuration(dAvg)} ›</button>` : ""}
   `;
 
   if (!editing && started) {
@@ -596,6 +600,8 @@ function wireDetail(day, started) {
     state.view.editing = !state.view.editing;
     render();
   };
+  const dt = document.getElementById("detailTime");
+  if (dt) dt.onclick = () => openDayTimes(day);
 
   // Exercise info is available whether or not the workout is started.
   // Tapping anywhere in the card row (except the check button) opens it.
@@ -1443,6 +1449,28 @@ function ensureBackdrop() {
   backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeModal(); });
   return backdrop;
 }
+// Popup listing past workout durations for one day, newest first (capped).
+function openDayTimes(day) {
+  const list = state.sessions
+    .filter((s) => s.dayId === day.id && typeof s.durationMin === "number" && s.durationMin >= 0)
+    .slice()
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const total = list.length;
+  const avg = total ? Math.round(list.reduce((a, s) => a + s.durationMin, 0) / total) : null;
+  const CAP = 30;
+  const rows = list.slice(0, CAP).map((s) => {
+    const [y, m, d] = s.date.split("-").map(Number);
+    return `<div class="time-row"><span class="time-date">${d} ${t().months[m - 1]} ${y}</span><span class="time-dur">${fmtDuration(s.durationMin)}</span></div>`;
+  }).join("");
+  openModal(`
+    <div class="modal-title">⏱ ${day.icon} ${L(day.name)}</div>
+    ${avg != null ? `<div class="time-avg">${t().avgTime}: <strong>${fmtDuration(avg)}</strong> · ${total} ${t().workoutsCount.toLowerCase()}</div>` : ""}
+    ${total ? `<div class="time-list">${rows}</div>` : `<div class="empty-state"><div class="big">⏱</div>${t().timesEmpty}</div>`}
+    ${total > CAP ? `<div class="subtle" style="text-align:center;margin-top:8px">${t().timesShown.replace("{n}", CAP).replace("{total}", total)}</div>` : ""}
+    <button class="btn-ghost" id="modalClose" style="margin-top:14px">${t().close}</button>
+  `);
+}
+
 function openModal(html) {
   ensureBackdrop();
   document.getElementById("modalBox").innerHTML = html;
