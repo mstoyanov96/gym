@@ -153,12 +153,15 @@ function renderList() {
   const now = new Date();
   const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const thisMonth = sessions.filter((s) => s.date.startsWith(monthKey)).length;
+  const durs = sessions.map((s) => s.durationMin).filter((x) => typeof x === "number" && x >= 0);
+  const avgMin = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null;
 
   let html = `
     <div class="stats">
       <div class="stat"><div class="stat-num">${sessions.length}</div><div class="stat-label">${t().workoutsCount}</div></div>
       <div class="stat"><div class="stat-num">${thisMonth}</div><div class="stat-label">${t().thisMonth}</div></div>
       <div class="stat"><div class="stat-num">${streak}</div><div class="stat-label">${t().streak}</div></div>
+      <div class="stat"><div class="stat-num">${avgMin != null ? fmtDuration(avgMin) : "–"}</div><div class="stat-label">${t().avgTime}</div></div>
     </div>
     <div class="section-title">${t().chooseDay}</div>
   `;

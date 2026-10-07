@@ -1,5 +1,5 @@
 // Simple offline cache. Bump CACHE to force an update when files change.
-const CACHE = "gym-v47";
+const CACHE = "gym-v48";
 // Images live in a separate, unversioned cache so they survive app updates
 // (bumping CACHE must not wipe already-downloaded exercise photos).
 const IMG_CACHE = "gym-img";
