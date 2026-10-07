@@ -236,8 +236,9 @@ function renderDetail() {
   const started = !!active;
   const editing = state.view.editing;
 
-  const totalSets = day.exercises.reduce((a, e) => a + Number(e.sets || 0), 0);
-  const doneSets = day.exercises.reduce((a, e) => a + Math.min(doneCountFor(active, e), e.sets), 0);
+  const setCount = (e) => (active && active.log && active.log[e.id]) ? active.log[e.id].length : Number(e.sets || 0);
+  const totalSets = day.exercises.reduce((a, e) => a + setCount(e), 0);
+  const doneSets = day.exercises.reduce((a, e) => a + Math.min(doneCountFor(active, e), setCount(e)), 0);
   const pct = totalSets ? Math.round((doneSets / totalSets) * 100) : 0;
 
   let html = `
@@ -283,7 +284,8 @@ function renderDetail() {
 function exerciseTrackCard(e, active) {
   const sets = (active && active.log && active.log[e.id]) || [];
   const doneCount = sets.filter((s) => s.done).length;
-  const isDone = e.sets > 0 && doneCount >= e.sets;
+  const target = sets.length || Number(e.sets) || 0;
+  const isDone = target > 0 && doneCount >= target;
   const rows = sets.map((s, i) => `
     <div class="set-row ${s.done ? "done" : ""}">
       <button class="set-num" data-toggle="${e.id}:${i}">${i + 1}</button>
@@ -311,7 +313,10 @@ function exerciseTrackCard(e, active) {
       </div>
       ${sets.length ? `
       <div class="sets-head">
-        <span>${t().setsDone}: ${doneCount}/${e.sets}</span>
+        <span class="sets-count">${t().setsDone}: ${doneCount}/${target}
+          <button class="set-adj" data-setdel="${e.id}" title="−" tabindex="-1">−</button>
+          <button class="set-adj" data-setadd="${e.id}" title="+" tabindex="-1">+</button>
+        </span>
         <span class="sets-headright">
           <span class="sets-colhead">${t().kg} × ${t().reps}</span>
           <button class="plate-btn" data-plate="${e.id}" title="${t().plateCalc}">🏋️</button>
@@ -669,6 +674,24 @@ function wireDetail(day, started) {
       if (inp) inp.value = set.reps;
     }
   );
+  viewEl.querySelectorAll("[data-setadd]").forEach((btn) =>
+    btn.onclick = () => {
+      const id = btn.dataset.setadd;
+      const arr = state.active.log[id] || (state.active.log[id] = []);
+      const last = arr[arr.length - 1];
+      arr.push({ weight: "", reps: "", pw: last ? (last.pw ?? "") : "", pr: last ? (last.pr ?? "") : "", done: false });
+      save(LS.active, state.active);
+      render();
+    }
+  );
+  viewEl.querySelectorAll("[data-setdel]").forEach((btn) =>
+    btn.onclick = () => {
+      const arr = state.active.log[btn.dataset.setdel] || [];
+      if (arr.length > 1) arr.pop();
+      save(LS.active, state.active);
+      render();
+    }
+  );
   viewEl.querySelectorAll("[data-check]").forEach((btn) =>
     btn.onclick = () => {
       const arr = state.active.log[btn.dataset.check] || [];
@@ -695,7 +718,9 @@ function wireDetail(day, started) {
   viewEl.querySelectorAll("[data-plate]").forEach((btn) =>
     btn.onclick = () => {
       const arr = (state.active.log && state.active.log[btn.dataset.plate]) || [];
-      const src = arr.find((s) => s.weight) || arr.find((s) => s.pw) || arr[0];
+      // Use the set the user has reached: the first not-done set, else the last set.
+      const i = arr.findIndex((s) => !s.done);
+      const src = i === -1 ? arr[arr.length - 1] : arr[i];
       openPlateCalc(src ? (src.weight || src.pw || "") : "", "dumbbell");
     }
   );

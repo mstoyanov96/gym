@@ -221,6 +221,13 @@ body {
 
 /* per-set weight / reps rows */
 .sets-head { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 0.78rem; color: var(--text-soft); font-weight: 600; }
+.sets-count { display: inline-flex; align-items: center; gap: 6px; }
+.set-adj {
+  width: 24px; height: 24px; border-radius: 7px; border: 1.5px solid var(--line);
+  background: var(--surface-2); color: var(--text); font-size: 1rem; font-weight: 700;
+  line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0;
+}
+.set-adj:active { background: var(--primary-soft); border-color: var(--primary); }
 .sets-colhead { font-size: 0.72rem; }
 .set-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .set-row { display: flex; align-items: center; gap: 8px; }
