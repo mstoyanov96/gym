@@ -1563,13 +1563,16 @@ let swReg = null;
 function checkForUpdate(btn) {
   const reg = swReg;
   if (!reg) { toast(t().upToDate); return; }
-  if (reg.waiting) { reg.waiting.postMessage({ type: "SKIP_WAITING" }); return; }
+  // Remember the user asked for it, so the next load (after the SW takes over) confirms.
+  const markUpdating = () => { try { sessionStorage.setItem("gym_updated", "1"); } catch (e) {} };
+  if (reg.waiting) { markUpdating(); reg.waiting.postMessage({ type: "SKIP_WAITING" }); return; }
   if (btn) btn.disabled = true;
   reg.update().then(() => {
     const sw = reg.installing || reg.waiting;
     if (!sw) { if (btn) btn.disabled = false; toast(t().upToDate); return; }
     const settle = () => {
       if ((sw.state === "installed" || sw.state === "activated") && reg.waiting) {
+        markUpdating();
         reg.waiting.postMessage({ type: "SKIP_WAITING" });
       }
     };
@@ -1641,6 +1644,14 @@ if ("serviceWorker" in navigator) {
 }
 
 render();
+
+// After a user-initiated update reload, confirm it completed.
+try {
+  if (sessionStorage.getItem("gym_updated")) {
+    sessionStorage.removeItem("gym_updated");
+    setTimeout(() => toast(t().updated), 400);
+  }
+} catch (e) {}
 
 // Warm the image cache in the background so opening a workout shows photos
 // instantly. The service worker stores them in a persistent cache.
