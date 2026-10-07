@@ -148,7 +148,9 @@ body {
 .day-info { flex: 1; min-width: 0; }
 .day-name { font-weight: 700; font-size: 1.02rem; }
 .day-focus { color: var(--text-soft); font-size: 0.85rem; margin-top: 2px; }
-.day-meta { color: var(--primary); font-size: 0.78rem; font-weight: 600; margin-top: 6px; }
+.day-meta { color: var(--primary); font-size: 0.78rem; font-weight: 600; margin-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.day-time { display: inline-flex; align-items: center; gap: 3px; background: var(--primary-soft); color: var(--primary-dark); padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+.day-resume { background: var(--primary); color: #fff; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
 .day-chevron { color: var(--line); font-size: 1.4rem; flex-shrink: 0; }
 .day-card.resume { border-color: var(--primary); background: var(--surface-2); }
 .resume-badge {

@@ -174,7 +174,11 @@ function renderList() {
         <div class="day-info">
           <div class="day-name">${L(d.name)}</div>
           <div class="day-focus">${L(d.focus)}</div>
-          <div class="day-meta">${d.exercises.length} ${t().exercises}${dAvg != null ? ` · ⏱ ${t().avgTime.toLowerCase()} ${fmtDuration(dAvg)}` : ""}${isResume ? " · " + t().resume : ""}</div>
+          <div class="day-meta">
+            <span>${d.exercises.length} ${t().exercises}</span>
+            ${dAvg != null ? `<span class="day-time">⏱ ${fmtDuration(dAvg)}</span>` : ""}
+            ${isResume ? `<span class="day-resume">${t().resume}</span>` : ""}
+          </div>
         </div>
         <div class="day-chevron">›</div>
       </div>`;
