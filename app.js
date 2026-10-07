@@ -1141,6 +1141,7 @@ function openSettings() {
       <label class="settings-item" id="setImport"><span>⬆️</span> ${t().restore}
         <input type="file" id="fileImport" accept="application/json,.json" hidden />
       </label>
+      <button class="settings-item" id="setUpdate"><span>🔄</span> ${t().checkUpdate}</button>
     </div>
     <div class="subtle backup-hint" style="margin-top:10px">${t().backupHint}</div>
     <button class="btn-ghost" id="modalClose" style="margin-top:14px">${t().close}</button>
@@ -1153,6 +1154,7 @@ function openSettings() {
     if (e.target.files[0]) importData(e.target.files[0]);
     e.target.value = "";
   };
+  document.getElementById("setUpdate").onclick = (e) => checkForUpdate(e.currentTarget);
 }
 
 function openThemePicker() {
@@ -1523,6 +1525,25 @@ window.addEventListener("popstate", () => {
 //  A new release shows a banner asking to update. Workouts live in
 //  localStorage and are never touched, so updating keeps all data.
 // ============================================================
+let swReg = null;
+function checkForUpdate(btn) {
+  const reg = swReg;
+  if (!reg) { toast(t().upToDate); return; }
+  if (reg.waiting) { reg.waiting.postMessage({ type: "SKIP_WAITING" }); return; }
+  if (btn) btn.disabled = true;
+  reg.update().then(() => {
+    const sw = reg.installing || reg.waiting;
+    if (!sw) { if (btn) btn.disabled = false; toast(t().upToDate); return; }
+    const settle = () => {
+      if ((sw.state === "installed" || sw.state === "activated") && reg.waiting) {
+        reg.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+    };
+    sw.addEventListener("statechange", settle);
+    settle();
+  }).catch(() => { if (btn) btn.disabled = false; toast(t().upToDate); });
+}
+
 function showUpdateBanner(reg) {
   if (document.getElementById("updateBanner")) return;
   const bar = document.createElement("div");
@@ -1557,6 +1578,7 @@ if ("serviceWorker" in navigator) {
   });
   window.addEventListener("load", () =>
     navigator.serviceWorker.register("sw.js").then((reg) => {
+      swReg = reg;
       reg.update();
       const watch = (sw) => {
         if (!sw) return;
