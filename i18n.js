@@ -124,6 +124,8 @@ const I18N = {
     playedWith: "С кого игра?",
     tennisSaved: "Записан тенис! 🎾",
     matches: "мача",
+    editNames: "Редактирай имената",
+    player: "Играч",
   },
   en: {
     appTitle: "My Workout",
@@ -248,5 +250,7 @@ const I18N = {
     playedWith: "Played with?",
     tennisSaved: "Tennis logged! 🎾",
     matches: "matches",
+    editNames: "Edit names",
+    player: "Player",
   },
 };

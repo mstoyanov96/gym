@@ -10,6 +10,7 @@ const LS = {
   lang: "gym_lang",
   equipment: "gym_equipment",
   theme: "gym_theme",
+  partners: "gym_partners",
 };
 
 // Sensible starting gym inventory (user edits it in the Equipment screen).
@@ -53,6 +54,7 @@ const state = {
   active: load(LS.active, null),          // {dayId, started, sets:{exId:count}, done:{exId:bool}}
   equipment: load(LS.equipment, null) || clone(DEFAULT_EQUIPMENT),
   theme: load(LS.theme, "coral"),
+  partners: load(LS.partners, ["Бубу", "Никола"]),
   tab: "workouts",
   view: { screen: "list", dayId: null, editing: false },
   calMonth: new Date().getFullYear() * 12 + new Date().getMonth(),
@@ -192,7 +194,7 @@ function renderList() {
       <div class="day-emoji">🎾</div>
       <div class="day-info">
         <div class="day-name">${t().tennis}</div>
-        <div class="day-focus">${PARTNERS.join(" · ")}</div>
+        <div class="day-focus">${state.partners.join(" · ")}</div>
         <div class="day-meta">
           <span>${tennisSessions.length} ${t().matches}</span>
           ${tAvg != null ? `<span class="day-time">⏱ ${fmtDuration(tAvg)}</span>` : ""}
@@ -1210,7 +1212,6 @@ function openThemePicker() {
 }
 
 // ---------- Tennis / quick activity log ----------
-const PARTNERS = ["Никола", "Бубу"];
 let tennisDraft = null;
 
 function openTennisLog(opts = {}) {
@@ -1219,7 +1220,7 @@ function openTennisLog(opts = {}) {
   tennisDraft = {
     editIdx: editing ? opts.editIdx : null,
     date: editing ? sess.date : todayStr(),
-    partner: editing ? (sess.partner || PARTNERS[0]) : PARTNERS[0],
+    partner: editing ? (sess.partner || state.partners[0]) : state.partners[0],
     durationMin: editing ? (sess.durationMin ?? 60) : 60,
   };
   renderTennisLog();
@@ -1227,7 +1228,7 @@ function openTennisLog(opts = {}) {
 
 function renderTennisLog() {
   const d = tennisDraft;
-  const partnerBtns = PARTNERS.map((p) =>
+  const partnerBtns = state.partners.map((p) =>
     `<button class="seg-btn ${d.partner === p ? "active" : ""}" data-partner="${p}">${p}</button>`
   ).join("");
   const quick = [30, 45, 60, 90, 120].map((m) =>
@@ -1235,7 +1236,10 @@ function renderTennisLog() {
   ).join("");
   openModal(`
     <div class="modal-title">🎾 ${t().tennis}</div>
-    <div class="modal-section-label">${t().playedWith}</div>
+    <div class="label-row">
+      <div class="modal-section-label">${t().playedWith}</div>
+      <button class="link-btn" id="editPartners">✎ ${t().editNames}</button>
+    </div>
     <div class="seg">${partnerBtns}</div>
     <div class="modal-section-label" style="margin-top:12px">${t().duration}</div>
     <div class="dur-stepper">
@@ -1259,7 +1263,28 @@ function renderTennisLog() {
       renderTennisLog();
     }
   );
+  document.getElementById("editPartners").onclick = () => openPartnersEdit();
   document.getElementById("tennisSave").onclick = saveTennis;
+}
+
+function openPartnersEdit() {
+  const esc = (s) => String(s).replace(/"/g, "&quot;");
+  const inputs = state.partners.map((p, i) =>
+    `<div class="field"><label>${t().player} ${i + 1}</label>
+       <input class="partner-inp" data-pi="${i}" type="text" value="${esc(p)}" /></div>`
+  ).join("");
+  openModal(`
+    <div class="modal-title">✎ ${t().editNames}</div>
+    ${inputs}
+    <button class="btn-primary" id="partnersSave" style="margin-top:14px">${t().saveLabel}</button>
+    <button class="btn-ghost" id="modalClose" style="margin-top:8px">${t().close}</button>
+  `);
+  document.getElementById("partnersSave").onclick = () => {
+    const names = [...document.querySelectorAll(".partner-inp")].map((inp) => inp.value.trim()).filter(Boolean);
+    if (names.length) { state.partners = names; save(LS.partners, state.partners); }
+    if (tennisDraft && !state.partners.includes(tennisDraft.partner)) tennisDraft.partner = state.partners[0];
+    renderTennisLog();
+  };
 }
 
 function saveTennis() {

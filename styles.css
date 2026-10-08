@@ -308,6 +308,8 @@ body {
   cursor: pointer; font-family: inherit;
 }
 .chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.label-row { display: flex; align-items: center; justify-content: space-between; }
+.link-btn { border: none; background: none; color: var(--primary); font-weight: 700; font-size: 0.82rem; cursor: pointer; font-family: inherit; padding: 2px 0; }
 
 /* plate calculator result */
 .plate-result { margin-top: 6px; }
