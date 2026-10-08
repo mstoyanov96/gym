@@ -184,11 +184,19 @@ function renderList() {
       </div>`;
   }).join("");
 
+  const tennisSessions = sessions.filter((s) => s.kind === "tennis");
+  const tDurs = tennisSessions.map((s) => s.durationMin).filter((x) => typeof x === "number" && x >= 0);
+  const tAvg = tDurs.length ? Math.round(tDurs.reduce((a, b) => a + b, 0) / tDurs.length) : null;
   html += `
-    <div class="day-card activity-card" id="cardTennis">
-      <div class="activity-emoji">🎾</div>
+    <div class="day-card" id="cardTennis">
+      <div class="day-emoji">🎾</div>
       <div class="day-info">
         <div class="day-name">${t().tennis}</div>
+        <div class="day-focus">${PARTNERS.join(" · ")}</div>
+        <div class="day-meta">
+          <span>${tennisSessions.length} ${t().matches}</span>
+          ${tAvg != null ? `<span class="day-time">⏱ ${fmtDuration(tAvg)}</span>` : ""}
+        </div>
       </div>
       <div class="day-chevron">›</div>
     </div>`;

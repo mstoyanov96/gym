@@ -153,12 +153,6 @@ body {
 .day-resume { background: var(--primary); color: #fff; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
 .day-chevron { color: var(--line); font-size: 1.4rem; flex-shrink: 0; }
 .day-card.resume { border-color: var(--primary); background: var(--surface-2); }
-.activity-card { padding: 10px 14px; }
-.activity-emoji {
-  font-size: 1.4rem; width: 44px; height: 44px;
-  display: grid; place-items: center;
-  background: var(--surface-2); border-radius: 12px; flex-shrink: 0;
-}
 .resume-badge {
   position: absolute; top: -8px; right: 14px;
   background: var(--primary); color: #fff;
