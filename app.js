@@ -213,7 +213,7 @@ function renderList() {
 function exportData() {
   const payload = {
     app: "my-workout", backupVersion: 1, exported: new Date().toISOString(),
-    program: state.program, sessions: state.sessions, equipment: state.equipment,
+    program: state.program, sessions: state.sessions, equipment: state.equipment, partners: state.partners,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -236,6 +236,7 @@ function importData(file) {
       if (data.program?.days) { state.program = data.program; save(LS.program, state.program); }
       if (Array.isArray(data.sessions)) { state.sessions = data.sessions; save(LS.sessions, state.sessions); }
       if (data.equipment?.plates) { state.equipment = data.equipment; save(LS.equipment, state.equipment); }
+      if (Array.isArray(data.partners) && data.partners.length) { state.partners = data.partners; save(LS.partners, state.partners); }
       toast(t().importDone);
       render();
     } catch {
