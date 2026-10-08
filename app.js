@@ -185,12 +185,10 @@ function renderList() {
   }).join("");
 
   html += `
-    <div class="section-title">${t().otherActivity}</div>
     <div class="day-card activity-card" id="cardTennis">
-      <div class="day-emoji">🎾</div>
+      <div class="activity-emoji">🎾</div>
       <div class="day-info">
         <div class="day-name">${t().tennis}</div>
-        <div class="day-focus">${t().playedWith}</div>
       </div>
       <div class="day-chevron">›</div>
     </div>`;

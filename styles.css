@@ -90,7 +90,7 @@ body {
 .view {
   max-width: 680px;
   margin: 0 auto;
-  padding: 24px 16px 28px;
+  padding: 16px 16px 20px;
   animation: fade 0.25s ease;
 }
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -98,7 +98,7 @@ body {
 .section-title {
   font-size: 1.05rem;
   font-weight: 700;
-  margin: 14px 2px 16px;
+  margin: 10px 2px 10px;
   color: var(--text);
 }
 .subtle { color: var(--text-soft); font-size: 0.9rem; }
@@ -126,8 +126,8 @@ body {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 18px;
-  margin-bottom: 16px;
+  padding: 14px;
+  margin-bottom: 10px;
   box-shadow: var(--shadow);
   cursor: pointer;
   display: flex;
@@ -153,6 +153,12 @@ body {
 .day-resume { background: var(--primary); color: #fff; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
 .day-chevron { color: var(--line); font-size: 1.4rem; flex-shrink: 0; }
 .day-card.resume { border-color: var(--primary); background: var(--surface-2); }
+.activity-card { padding: 10px 14px; }
+.activity-emoji {
+  font-size: 1.4rem; width: 44px; height: 44px;
+  display: grid; place-items: center;
+  background: var(--surface-2); border-radius: 12px; flex-shrink: 0;
+}
 .resume-badge {
   position: absolute; top: -8px; right: 14px;
   background: var(--primary); color: #fff;
