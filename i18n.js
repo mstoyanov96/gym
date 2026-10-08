@@ -119,6 +119,10 @@ const I18N = {
     themeTitle: "Тема / цвят",
     plateDumbbellMax: "Дъмбелът побира макс {n} диска на страна",
     settings: "Настройки",
+    otherActivity: "Друга активност",
+    tennis: "Тенис",
+    playedWith: "С кого игра?",
+    tennisSaved: "Записан тенис! 🎾",
   },
   en: {
     appTitle: "My Workout",
@@ -238,5 +242,9 @@ const I18N = {
     themeTitle: "Theme / color",
     plateDumbbellMax: "Dumbbell holds max {n} plates per side",
     settings: "Settings",
+    otherActivity: "Other activity",
+    tennis: "Tennis",
+    playedWith: "Played with?",
+    tennisSaved: "Tennis logged! 🎾",
   },
 };

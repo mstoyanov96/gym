@@ -184,10 +184,22 @@ function renderList() {
       </div>`;
   }).join("");
 
+  html += `
+    <div class="section-title">${t().otherActivity}</div>
+    <div class="day-card activity-card" id="cardTennis">
+      <div class="day-emoji">🎾</div>
+      <div class="day-info">
+        <div class="day-name">${t().tennis}</div>
+        <div class="day-focus">${t().playedWith}</div>
+      </div>
+      <div class="day-chevron">›</div>
+    </div>`;
+
   viewEl.innerHTML = html;
-  viewEl.querySelectorAll(".day-card").forEach((c) =>
+  viewEl.querySelectorAll(".day-card[data-day]").forEach((c) =>
     c.addEventListener("click", () => openDay(c.dataset.day))
   );
+  viewEl.querySelector("#cardTennis").addEventListener("click", () => openTennisLog());
 }
 
 function exportData() {
@@ -1191,6 +1203,84 @@ function openThemePicker() {
   );
 }
 
+// ---------- Tennis / quick activity log ----------
+const PARTNERS = ["Никола", "Бубу"];
+let tennisDraft = null;
+
+function openTennisLog(opts = {}) {
+  const editing = opts.editIdx != null;
+  const sess = editing ? state.sessions[opts.editIdx] : null;
+  tennisDraft = {
+    editIdx: editing ? opts.editIdx : null,
+    date: editing ? sess.date : todayStr(),
+    partner: editing ? (sess.partner || PARTNERS[0]) : PARTNERS[0],
+    durationMin: editing ? (sess.durationMin ?? 60) : 60,
+  };
+  renderTennisLog();
+}
+
+function renderTennisLog() {
+  const d = tennisDraft;
+  const partnerBtns = PARTNERS.map((p) =>
+    `<button class="seg-btn ${d.partner === p ? "active" : ""}" data-partner="${p}">${p}</button>`
+  ).join("");
+  const quick = [30, 45, 60, 90, 120].map((m) =>
+    `<button class="chip ${d.durationMin === m ? "active" : ""}" data-dur="${m}">${fmtDuration(m)}</button>`
+  ).join("");
+  openModal(`
+    <div class="modal-title">🎾 ${t().tennis}</div>
+    <div class="modal-section-label">${t().playedWith}</div>
+    <div class="seg">${partnerBtns}</div>
+    <div class="modal-section-label" style="margin-top:12px">${t().duration}</div>
+    <div class="dur-stepper">
+      <button class="step-btn" data-durstep="-15">−</button>
+      <span class="dur-val">${fmtDuration(d.durationMin)}</span>
+      <button class="step-btn" data-durstep="15">+</button>
+    </div>
+    <div class="chip-row">${quick}</div>
+    <button class="btn-primary" id="tennisSave" style="margin-top:18px">${t().saveLabel}</button>
+    <button class="btn-ghost" id="modalClose" style="margin-top:8px">${t().close}</button>
+  `);
+  document.querySelectorAll("[data-partner]").forEach((b) =>
+    b.onclick = () => { tennisDraft.partner = b.dataset.partner; renderTennisLog(); }
+  );
+  document.querySelectorAll("[data-dur]").forEach((b) =>
+    b.onclick = () => { tennisDraft.durationMin = Number(b.dataset.dur); renderTennisLog(); }
+  );
+  document.querySelectorAll("[data-durstep]").forEach((b) =>
+    b.onclick = () => {
+      tennisDraft.durationMin = Math.max(15, tennisDraft.durationMin + Number(b.dataset.durstep));
+      renderTennisLog();
+    }
+  );
+  document.getElementById("tennisSave").onclick = saveTennis;
+}
+
+function saveTennis() {
+  const d = tennisDraft;
+  const session = {
+    date: d.date,
+    kind: "tennis",
+    dayId: "tennis",
+    dayName: { bg: "Тенис", en: "Tennis" },
+    icon: "🎾",
+    partner: d.partner,
+    startedAt: null,
+    endedAt: null,
+    durationMin: d.durationMin,
+    exercises: [],
+  };
+  if (d.editIdx != null) state.sessions[d.editIdx] = session;
+  else state.sessions.push(session);
+  save(LS.sessions, state.sessions);
+  closeModal();
+  toast(t().tennisSaved);
+  const [yy, mm] = d.date.split("-").map(Number);
+  state.tab = "calendar";
+  state.calMonth = yy * 12 + (mm - 1);
+  render();
+}
+
 // ============================================================
 //  CALENDAR
 // ============================================================
@@ -1232,6 +1322,15 @@ function renderCalendar() {
         const dd = parts[2];
         const wd = t().weekdays[(new Date(parts[0], parts[1] - 1, dd).getDay() + 6) % 7];
         return byDate[d].map((s) => {
+          if (s.kind === "tennis") {
+            return `
+            <div class="cal-list-item" data-date="${d}">
+              <span class="cal-list-date"><b>${dd}</b><span>${wd}</span></span>
+              <span class="cal-list-emoji">${s.icon}</span>
+              <span class="cal-list-name">${L(s.dayName)}${s.partner ? ` · ${s.partner}` : ""}</span>
+              <span class="cal-list-meta">${fmtDuration(s.durationMin) || ""}</span>
+            </div>`;
+          }
           const done = s.exercises.filter((e) => e.setsDone > 0).length;
           const total = s.exercises.length;
           return `
@@ -1276,9 +1375,24 @@ function openDayLog(date, list) {
   } else {
     body = list.map((s) => {
       const idx = state.sessions.indexOf(s);
+      const dur = fmtDuration(s.durationMin);
+      if (s.kind === "tennis") {
+        return `
+        <div class="log-card">
+          <div class="log-card-head">
+            <span class="log-emoji">${s.icon}</span>
+            <span class="log-name">${L(s.dayName)}</span>
+            ${s.partner ? `<span class="log-badge">${s.partner}</span>` : ""}
+          </div>
+          ${dur ? `<div class="log-stats"><span class="log-stat">⏱ ${dur}</span></div>` : ""}
+          <div class="log-actions">
+            <button class="btn-ghost btn-sm" data-edit-tennis="${idx}">✎ ${t().edit}</button>
+            <button class="btn-ghost btn-sm btn-danger" data-del-sess="${idx}">🗑 ${t().deleteExercise}</button>
+          </div>
+        </div>`;
+      }
       const done = s.exercises.filter((e) => e.setsDone > 0).length;
       const total = s.exercises.length;
-      const dur = fmtDuration(s.durationMin);
       const exLines = s.exercises.map((e) => {
         let chips = "";
         if (e.logs && e.logs.length) {
@@ -1337,6 +1451,9 @@ function openDayLog(date, list) {
   );
   document.querySelectorAll("[data-edit-sess]").forEach((b) =>
     b.onclick = () => openSessionEdit(date, Number(b.dataset.editSess))
+  );
+  document.querySelectorAll("[data-edit-tennis]").forEach((b) =>
+    b.onclick = () => openTennisLog({ editIdx: Number(b.dataset.editTennis) })
   );
 }
 
