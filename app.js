@@ -113,6 +113,8 @@ function fmtDuration(min) {
   const h = Math.floor(min / 60), m = min % 60;
   return m ? `${h} ${t().hrShort} ${m} ${t().minShort}` : `${h} ${t().hrShort}`;
 }
+// "N word" with singular form when N === 1.
+function plur(n, oneKey, manyKey) { return `${n} ${n === 1 ? t()[oneKey] : t()[manyKey]}`; }
 
 // ---------- Toast ----------
 let toastTimer;
@@ -177,7 +179,7 @@ function renderList() {
           <div class="day-name">${L(d.name)}</div>
           <div class="day-focus">${L(d.focus)}</div>
           <div class="day-meta">
-            <span>${d.exercises.length} ${t().exercises}</span>
+            <span>${plur(d.exercises.length, "exerciseOne", "exercises")}</span>
             ${dAvg != null ? `<span class="day-time">⏱ ${fmtDuration(dAvg)}</span>` : ""}
             ${isResume ? `<span class="day-resume">${t().resume}</span>` : ""}
           </div>
@@ -196,7 +198,7 @@ function renderList() {
         <div class="day-name">${t().tennis}</div>
         <div class="day-focus">${state.partners.join(" · ")}</div>
         <div class="day-meta">
-          <span>${tennisSessions.length} ${t().matches}</span>
+          <span>${plur(tennisSessions.length, "matchOne", "matches")}</span>
           ${tAvg != null ? `<span class="day-time">⏱ ${fmtDuration(tAvg)}</span>` : ""}
         </div>
       </div>
@@ -1382,7 +1384,7 @@ function renderCalendar() {
       <div class="cal-month">${t().months[month]} ${year}</div>
       <button class="cal-nav" id="calNext">›</button>
     </div>
-    <div class="subtle" style="text-align:center;margin-bottom:14px">${monthCount} ${t().workoutsCount}${avgMin != null ? ` · ${t().avgTime}: ${fmtDuration(avgMin)}` : ""}</div>
+    <div class="subtle" style="text-align:center;margin-bottom:14px">${plur(monthCount, "workoutOne", "workoutsCount")}${avgMin != null ? ` · ${t().avgTime}: ${fmtDuration(avgMin)}` : ""}</div>
     <div class="cal-grid">${dow}${cells}</div>
     <div class="section-title" style="margin-top:22px">${t().loggedWorkouts}</div>
     <div class="cal-list">${overview}</div>
