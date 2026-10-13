@@ -96,6 +96,22 @@ function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
 // Accept both "," and "." as decimal separator (iOS numeric keyboards type ",").
 function fixDec(v) { return String(v ?? "").replace(",", "."); }
 function num(v) { const n = Number(fixDec(v)); return Number.isFinite(n) ? n : NaN; }
+
+// Android Gboard dismisses the keyboard per keystroke on type=text+inputmode=decimal;
+// type=number is stable there. iOS keeps type=text so it can type a comma decimal.
+const IS_ANDROID = /Android/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "");
+
+// Persist the active session off the keystroke path (a synchronous localStorage write
+// on every input could stutter the soft keyboard). Flushed on blur / pagehide.
+let _activeSaveTimer = null;
+function saveActiveSoon() {
+  clearTimeout(_activeSaveTimer);
+  _activeSaveTimer = setTimeout(() => { _activeSaveTimer = null; if (state.active) save(LS.active, state.active); }, 300);
+}
+function flushActiveSave() {
+  if (_activeSaveTimer) { clearTimeout(_activeSaveTimer); _activeSaveTimer = null; }
+  if (state.active) save(LS.active, state.active);
+}
 function t() { return I18N[state.lang] || I18N.bg; }
 function L(obj) {
   // Resolve a bilingual field (string or {bg,en}).
@@ -322,7 +338,7 @@ function exerciseTrackCard(e, active) {
   const rows = sets.map((s, i) => `
     <div class="set-row ${s.done ? "done" : ""}">
       <button class="set-num" data-toggle="${e.id}:${i}">${i + 1}</button>
-      <input class="set-field set-weight" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+      <input class="set-field set-weight" type="${IS_ANDROID ? "number" : "text"}" inputmode="decimal" step="0.5" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
              placeholder="${s.pw || t().kg}" value="${s.weight ?? ""}" data-w="${e.id}:${i}" />
       <span class="set-mult">×</span>
       <div class="reps-stepper">
@@ -682,20 +698,22 @@ function wireDetail(day, started) {
       render();
     }
   );
-  viewEl.querySelectorAll("[data-w]").forEach((inp) =>
+  viewEl.querySelectorAll("[data-w]").forEach((inp) => {
     inp.oninput = () => {
       const parts = inp.dataset.w.split(":");
       state.active.log[parts[0]][Number(parts[1])].weight = fixDec(inp.value);
-      save(LS.active, state.active);
-    }
-  );
-  viewEl.querySelectorAll("[data-r]").forEach((inp) =>
+      saveActiveSoon();
+    };
+    inp.onblur = flushActiveSave;
+  });
+  viewEl.querySelectorAll("[data-r]").forEach((inp) => {
     inp.oninput = () => {
       const parts = inp.dataset.r.split(":");
       state.active.log[parts[0]][Number(parts[1])].reps = fixDec(inp.value);
-      save(LS.active, state.active);
-    }
-  );
+      saveActiveSoon();
+    };
+    inp.onblur = flushActiveSave;
+  });
   viewEl.querySelectorAll("[data-rstep]").forEach((btn) =>
     btn.onclick = () => {
       const [id, idx, delta] = btn.dataset.rstep.split(":");
@@ -1072,18 +1090,22 @@ function platePairs(share) {
     .filter((p) => p.pairs > 0);
 }
 
-// Every distinct total weight you can build with the available plates, keeping
-// the combination that uses the fewest plates for each total. Symmetric load.
+// Every distinct plate combination you can build with the available plates, so the
+// user can pick a convenient one (e.g. 5+2.5+2.5 instead of 5+5). Symmetric load.
 function plateCombos(base, maxPerSide, share) {
   const b = Number(base) || 0;
   const cap = maxPerSide > 0 ? maxPerSide : 8;
   const kinds = platePairs(share);
-  const best = new Map();  // total -> perSide[] (fewest plates)
+  const seen = new Set();
+  const out = [];
   function rec(idx, perSide, used) {
     if (perSide.length) {
-      const total = Number((b + perSide.reduce((a, c) => a + c, 0) * 2).toFixed(2));
-      const prev = best.get(total);
-      if (!prev || perSide.length < prev.length) best.set(total, perSide.slice());
+      const sig = perSide.join(",");  // canonical: plates are pushed in descending order
+      if (!seen.has(sig)) {
+        seen.add(sig);
+        const total = Number((b + perSide.reduce((a, c) => a + c, 0) * 2).toFixed(2));
+        out.push({ total, perSide: perSide.slice() });
+      }
     }
     if (used >= cap || idx >= kinds.length) return;
     const k = kinds[idx];
@@ -1096,9 +1118,7 @@ function plateCombos(base, maxPerSide, share) {
     rec(idx + 1, perSide, used);
   }
   rec(0, [], 0);
-  return [...best.entries()]
-    .map(([total, perSide]) => ({ total, perSide }))
-    .sort((a, b2) => a.total - b2.total);
+  return out.sort((a, b2) => a.total - b2.total || a.perSide.length - b2.perSide.length);
 }
 
 // Colored plate graphic (CSS). Size scales with weight.
@@ -1774,6 +1794,10 @@ window.addEventListener("popstate", () => {
     render();
   }
 });
+
+// Make sure any debounced set edits are persisted before the app is backgrounded.
+window.addEventListener("pagehide", flushActiveSave);
+document.addEventListener("visibilitychange", () => { if (document.hidden) flushActiveSave(); });
 
 // ============================================================
 //  SERVICE WORKER + UPDATE PROMPT
