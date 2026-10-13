@@ -322,6 +322,24 @@ body {
 .plate-ok { margin-top: 12px; font-weight: 700; color: var(--green); }
 .plate-note { margin-top: 12px; color: var(--text-soft); font-weight: 600; }
 
+/* plate calc: sub-toggle + combinations legend */
+.seg-sub { margin-top: -4px; }
+.plate-legend { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.plate-legend summary { cursor: pointer; font-weight: 700; color: var(--primary-dark); font-size: 0.9rem; padding: 4px 0; list-style: none; }
+.plate-legend summary::-webkit-details-marker { display: none; }
+.combo-hint { font-size: 0.78rem; color: var(--text-soft); margin: 6px 0 8px; }
+.combo-list { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow: auto; }
+.combo-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.combo-plates { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; flex: 1; min-width: 0; }
+.combo-total { font-weight: 800; color: var(--text); white-space: nowrap; }
+.pdisc { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; font-weight: 800; font-size: 0.68rem; box-shadow: var(--shadow); flex-shrink: 0; }
+.pdisc-20 { background: #2563eb; }
+.pdisc-15 { background: #d99e00; }
+.pdisc-10 { background: #16a34a; }
+.pdisc-5 { background: #dc2626; }
+.pdisc-2_5 { background: #64748b; font-size: 0.58rem; }
+.pdisc-1_25 { background: #94a3b8; font-size: 0.54rem; }
+
 /* equipment editor */
 .equip-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .equip-kg, .equip-count {

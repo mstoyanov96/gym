@@ -322,12 +322,12 @@ function exerciseTrackCard(e, active) {
   const rows = sets.map((s, i) => `
     <div class="set-row ${s.done ? "done" : ""}">
       <button class="set-num" data-toggle="${e.id}:${i}">${i + 1}</button>
-      <input class="set-field set-weight" type="text" inputmode="decimal"
+      <input class="set-field set-weight" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
              placeholder="${s.pw || t().kg}" value="${s.weight ?? ""}" data-w="${e.id}:${i}" />
       <span class="set-mult">×</span>
       <div class="reps-stepper">
         <button class="step-btn" data-rstep="${e.id}:${i}:-1" tabindex="-1">−</button>
-        <input class="set-field set-reps" type="text" inputmode="numeric"
+        <input class="set-field set-reps" type="text" inputmode="numeric" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                placeholder="${s.pr || L(e.reps)}" value="${s.reps ?? ""}" data-r="${e.id}:${i}" />
         <button class="step-btn" data-rstep="${e.id}:${i}:1" tabindex="-1">+</button>
       </div>
@@ -1044,14 +1044,15 @@ function sortedPlates() {
 
 // Greedy plate loading for ONE side of a symmetric load (barbell side / dumbbell end).
 // `maxPerSide` caps how many plates physically fit on one sleeve (dumbbells ~3).
-function calcPlates(target, base, maxPerSide) {
+// `share` splits the owned plates across that many implements (2 = a pair of dumbbells).
+function calcPlates(target, base, maxPerSide, share) {
   const tw = Number(target), b = Number(base) || 0;
   const cap = maxPerSide > 0 ? maxPerSide : Infinity;
   if (!(tw > 0)) return { empty: true, perSide: [], loaded: b };
   const perSideTarget = (tw - b) / 2;
   if (perSideTarget < -1e-9) return { under: true, perSide: [], loaded: b };
   if (perSideTarget < 1e-9) return { ok: true, perSide: [], loaded: b };
-  const avail = sortedPlates().map((p) => ({ kg: p.kg, pairs: Math.floor(p.count / 2) }));
+  const avail = platePairs(share);
   let rem = perSideTarget;
   const perSide = [];
   for (const p of avail) {
@@ -1062,17 +1063,63 @@ function calcPlates(target, base, maxPerSide) {
   return { ok: Math.abs(loaded - tw) < 1e-9, perSide, loaded, capped };
 }
 
-let plateCalc = null;  // { weight, mode:"bar"|"dumbbell" }
+// Pairs of each plate available per implement. `share` splits the owned plates
+// across that many implements (2 = a pair of dumbbells used at the same time).
+function platePairs(share) {
+  const div = share > 1 ? share : 1;
+  return sortedPlates()
+    .map((p) => ({ kg: p.kg, pairs: Math.floor(Math.floor(p.count / div) / 2) }))
+    .filter((p) => p.pairs > 0);
+}
+
+// Every distinct total weight you can build with the available plates, keeping
+// the combination that uses the fewest plates for each total. Symmetric load.
+function plateCombos(base, maxPerSide, share) {
+  const b = Number(base) || 0;
+  const cap = maxPerSide > 0 ? maxPerSide : 8;
+  const kinds = platePairs(share);
+  const best = new Map();  // total -> perSide[] (fewest plates)
+  function rec(idx, perSide, used) {
+    if (perSide.length) {
+      const total = Number((b + perSide.reduce((a, c) => a + c, 0) * 2).toFixed(2));
+      const prev = best.get(total);
+      if (!prev || perSide.length < prev.length) best.set(total, perSide.slice());
+    }
+    if (used >= cap || idx >= kinds.length) return;
+    const k = kinds[idx];
+    const maxc = Math.min(k.pairs, cap - used);
+    for (let c = 1; c <= maxc; c++) {
+      for (let j = 0; j < c; j++) perSide.push(k.kg);
+      rec(idx + 1, perSide, used + c);
+      for (let j = 0; j < c; j++) perSide.pop();
+    }
+    rec(idx + 1, perSide, used);
+  }
+  rec(0, [], 0);
+  return [...best.entries()]
+    .map(([total, perSide]) => ({ total, perSide }))
+    .sort((a, b2) => a.total - b2.total);
+}
+
+// Colored plate graphic (CSS). Size scales with weight.
+function plateDisc(kg) {
+  const d = Math.round(24 + Math.min(Number(kg) || 0, 25) * 0.9);
+  const cls = "pdisc-" + String(kg).replace(".", "_");
+  return `<span class="pdisc ${cls}" style="width:${d}px;height:${d}px">${fmtKg(kg)}</span>`;
+}
+
+let plateCalc = null;  // { weight, mode:"bar"|"dumbbell", pair:bool }
 function openPlateCalc(weight, mode) {
-  plateCalc = { weight: weight != null && weight !== "" ? Number(weight) : "", mode: mode || "dumbbell" };
+  plateCalc = { weight: weight != null && weight !== "" ? Number(weight) : "", mode: mode || "dumbbell", pair: false };
   renderPlateCalc();
 }
 function renderPlateCalc() {
   const eq = state.equipment;
   const isDumbbell = plateCalc.mode !== "bar";
+  const share = isDumbbell && plateCalc.pair ? 2 : 1;
   const base = isDumbbell ? Number(eq.dumbbellHandle) || 0 : Number(eq.bar) || 0;
   const maxPerSide = isDumbbell ? 3 : Infinity;  // one dumbbell sleeve fits ~3 plates
-  const res = plateCalc.weight === "" ? null : calcPlates(plateCalc.weight, base, maxPerSide);
+  const res = plateCalc.weight === "" ? null : calcPlates(plateCalc.weight, base, maxPerSide, share);
   let resultHtml;
   if (!res) {
     resultHtml = `<div class="subtle" style="padding:8px 0">${t().plateEnterWeight}</div>`;
@@ -1093,23 +1140,46 @@ function renderPlateCalc() {
       ${summary}
       ${capNote}`;
   }
+  const combos = plateCombos(base, maxPerSide, share);
+  const comboRows = combos.map((c) => `
+    <div class="combo-row">
+      <span class="combo-plates">${c.perSide.map(plateDisc).join("")}</span>
+      <span class="combo-total">${fmtKg(c.total)} ${t().kg}</span>
+    </div>`).join("");
+  const legend = `
+    <details class="plate-legend">
+      <summary>📋 ${t().plateAllCombos}</summary>
+      <div class="combo-hint">${t().plateCombosHint}</div>
+      ${comboRows ? `<div class="combo-list">${comboRows}</div>`
+                  : `<div class="plate-note">${t().plateCombosEmpty}</div>`}
+    </details>`;
+  const pairToggle = isDumbbell ? `
+    <div class="seg seg-sub">
+      <button class="seg-btn ${!plateCalc.pair ? "active" : ""}" data-pair="0">${t().plateSingle}</button>
+      <button class="seg-btn ${plateCalc.pair ? "active" : ""}" data-pair="1">${t().platePairLabel}</button>
+    </div>` : "";
   openModal(`
     <div class="modal-title">🏋️ ${t().plateCalc}</div>
     <div class="seg">
       <button class="seg-btn ${plateCalc.mode === "dumbbell" ? "active" : ""}" data-mode="dumbbell">${t().dumbbell}</button>
       <button class="seg-btn ${plateCalc.mode === "bar" ? "active" : ""}" data-mode="bar">${t().barbell}</button>
     </div>
+    ${pairToggle}
     <div class="field">
       <label>${t().targetWeight} (${t().kg})</label>
-      <input id="plateWeight" type="text" inputmode="decimal" value="${plateCalc.weight}" />
+      <input id="plateWeight" type="text" inputmode="decimal" autocomplete="off" value="${plateCalc.weight}" />
     </div>
     <div class="plate-result">${resultHtml}</div>
+    ${legend}
     <div class="subtle" style="margin-top:10px">${plateCalc.mode === "bar" ? t().barbell : t().dumbbell}: ${fmtKg(base)} ${t().kg}</div>
     <button class="btn-ghost" id="openEquip" style="margin-top:12px">⚙️ ${t().editEquipment}</button>
     <button class="btn-ghost" id="modalClose" style="margin-top:8px">${t().close}</button>
   `);
   document.querySelectorAll(".seg-btn[data-mode]").forEach((b) =>
     b.onclick = () => { plateCalc.mode = b.dataset.mode; renderPlateCalc(); }
+  );
+  document.querySelectorAll(".seg-btn[data-pair]").forEach((b) =>
+    b.onclick = () => { plateCalc.pair = b.dataset.pair === "1"; renderPlateCalc(); }
   );
   const wInput = document.getElementById("plateWeight");
   wInput.oninput = () => { plateCalc.weight = wInput.value === "" ? "" : num(wInput.value); renderPlateCalc(); };
