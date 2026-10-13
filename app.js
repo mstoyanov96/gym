@@ -1128,9 +1128,9 @@ function plateDisc(kg) {
   return `<span class="pdisc ${cls}" style="width:${d}px;height:${d}px">${fmtKg(kg)}</span>`;
 }
 
-let plateCalc = null;  // { weight, mode:"bar"|"dumbbell", pair:bool }
+let plateCalc = null;  // { weight, mode:"bar"|"dumbbell", pair:bool, sort:"asc"|"desc", legendOpen:bool }
 function openPlateCalc(weight, mode) {
-  plateCalc = { weight: weight != null && weight !== "" ? Number(weight) : "", mode: mode || "dumbbell", pair: false };
+  plateCalc = { weight: weight != null && weight !== "" ? Number(weight) : "", mode: mode || "dumbbell", pair: false, sort: "asc", legendOpen: false };
   renderPlateCalc();
 }
 function renderPlateCalc() {
@@ -1161,15 +1161,23 @@ function renderPlateCalc() {
       ${capNote}`;
   }
   const combos = plateCombos(base, maxPerSide, share);
-  const comboRows = combos.map((c) => `
+  const dir = plateCalc.sort === "desc" ? -1 : 1;
+  const sortedCombos = [...combos].sort((a, b2) => dir * (a.total - b2.total) || a.perSide.length - b2.perSide.length);
+  const comboRows = sortedCombos.map((c) => `
     <div class="combo-row">
       <span class="combo-plates">${c.perSide.map(plateDisc).join("")}</span>
       <span class="combo-total">${fmtKg(c.total)} ${t().kg}</span>
     </div>`).join("");
+  const sortBar = comboRows ? `
+    <div class="combo-sort">
+      <button class="sort-btn ${plateCalc.sort === "asc" ? "active" : ""}" data-sort="asc">${t().plateSortAsc}</button>
+      <button class="sort-btn ${plateCalc.sort === "desc" ? "active" : ""}" data-sort="desc">${t().plateSortDesc}</button>
+    </div>` : "";
   const legend = `
-    <details class="plate-legend">
+    <details class="plate-legend" ${plateCalc.legendOpen ? "open" : ""}>
       <summary>📋 ${t().plateAllCombos}</summary>
       <div class="combo-hint">${t().plateCombosHint}</div>
+      ${sortBar}
       ${comboRows ? `<div class="combo-list">${comboRows}</div>`
                   : `<div class="plate-note">${t().plateCombosEmpty}</div>`}
     </details>`;
@@ -1201,6 +1209,11 @@ function renderPlateCalc() {
   document.querySelectorAll(".seg-btn[data-pair]").forEach((b) =>
     b.onclick = () => { plateCalc.pair = b.dataset.pair === "1"; renderPlateCalc(); }
   );
+  document.querySelectorAll(".sort-btn[data-sort]").forEach((b) =>
+    b.onclick = () => { plateCalc.sort = b.dataset.sort; plateCalc.legendOpen = true; renderPlateCalc(); }
+  );
+  const legendEl = document.querySelector(".plate-legend");
+  if (legendEl) legendEl.ontoggle = () => { plateCalc.legendOpen = legendEl.open; };
   const wInput = document.getElementById("plateWeight");
   wInput.oninput = () => { plateCalc.weight = wInput.value === "" ? "" : num(wInput.value); renderPlateCalc(); };
   document.getElementById("openEquip").onclick = () => openEquipment();

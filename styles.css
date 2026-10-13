@@ -328,6 +328,12 @@ body {
 .plate-legend summary { cursor: pointer; font-weight: 700; color: var(--primary-dark); font-size: 0.9rem; padding: 4px 0; list-style: none; }
 .plate-legend summary::-webkit-details-marker { display: none; }
 .combo-hint { font-size: 0.78rem; color: var(--text-soft); margin: 6px 0 8px; }
+.combo-sort { display: flex; gap: 6px; margin-bottom: 10px; }
+.sort-btn {
+  flex: 1; border: 1.5px solid var(--line); background: var(--surface-2); color: var(--text-soft);
+  padding: 7px 10px; border-radius: 9px; font-weight: 700; font-size: 0.8rem; cursor: pointer; font-family: inherit;
+}
+.sort-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .combo-list { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow: auto; }
 .combo-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface-2); }
 .combo-plates { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; flex: 1; min-width: 0; }
