@@ -281,6 +281,8 @@ function renderDetail() {
   const started = !!active;
   const editing = state.view.editing;
 
+  if (active) ensureActiveLog(day);
+
   const setCount = (e) => (active && active.log && active.log[e.id]) ? active.log[e.id].length : Number(e.sets || 0);
   const totalSets = day.exercises.reduce((a, e) => a + setCount(e), 0);
   const doneSets = day.exercises.reduce((a, e) => a + Math.min(doneCountFor(active, e), setCount(e)), 0);
@@ -410,17 +412,32 @@ function lastLogFor(exId) {
   }
   return null;
 }
+// Build the per-set log rows for one exercise, pre-filling last time's numbers as hints.
+function buildLogRows(e) {
+  const prev = lastLogFor(e.id);
+  const n = Number(e.sets) || 1;
+  return Array.from({ length: n }, (_, i) => {
+    const p = prev ? (prev[i] || prev[prev.length - 1]) : null;
+    // Keep the actual value empty; show last time's numbers as a grey hint (pw/pr).
+    return { weight: "", reps: "", pw: p ? (p.weight ?? "") : "", pr: p ? (p.reps ?? "") : "", done: false };
+  });
+}
+
+// Make sure every exercise in the day has a log entry during an active workout,
+// so exercises added or swapped in mid-session still show their set rows.
+function ensureActiveLog(day) {
+  if (!state.active) return;
+  const log = state.active.log || (state.active.log = {});
+  let changed = false;
+  day.exercises.forEach((e) => {
+    if (!Array.isArray(log[e.id])) { log[e.id] = buildLogRows(e); changed = true; }
+  });
+  if (changed) save(LS.active, state.active);
+}
+
 function startActive(day) {
   const log = {};
-  day.exercises.forEach((e) => {
-    const prev = lastLogFor(e.id);
-    const n = Number(e.sets) || 0;
-    log[e.id] = Array.from({ length: n }, (_, i) => {
-      const p = prev ? (prev[i] || prev[prev.length - 1]) : null;
-      // Keep the actual value empty; show last time's numbers as a grey hint (pw/pr).
-      return { weight: "", reps: "", pw: p ? (p.weight ?? "") : "", pr: p ? (p.reps ?? "") : "", done: false };
-    });
-  });
+  day.exercises.forEach((e) => { log[e.id] = buildLogRows(e); });
   state.active = { dayId: day.id, started: todayStr(), startedAt: Date.now(), log };
   save(LS.active, state.active);
 }
