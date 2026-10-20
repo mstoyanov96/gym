@@ -1166,33 +1166,42 @@ function applyPlateWeight(total) {
   render();
   toast(t().plateFilled.replace("{w}", fmtKg(Number(total))));
 }
-function renderPlateCalc() {
+// Per-side plate result for the entered weight (recomputed in place on each keystroke
+// so the input node is never rebuilt — rebuilding it closes the mobile keyboard).
+function plateResultHtml() {
   const eq = state.equipment;
   const isDumbbell = plateCalc.mode !== "bar";
   const share = isDumbbell && plateCalc.pair ? 2 : 1;
   const base = isDumbbell ? Number(eq.dumbbellHandle) || 0 : Number(eq.bar) || 0;
   const maxPerSide = isDumbbell ? 3 : Infinity;  // one dumbbell sleeve fits ~3 plates
   const res = plateCalc.weight === "" ? null : calcPlates(plateCalc.weight, base, maxPerSide, share);
-  let resultHtml;
   if (!res) {
-    resultHtml = `<div class="subtle" style="padding:8px 0">${t().plateEnterWeight}</div>`;
+    return `<div class="subtle" style="padding:8px 0">${t().plateEnterWeight}</div>`;
   } else if (res.under) {
-    resultHtml = `<div class="plate-note">${t().plateBelowBar} (${fmtKg(base)} ${t().kg})</div>`;
+    return `<div class="plate-note">${t().plateBelowBar} (${fmtKg(base)} ${t().kg})</div>`;
   } else if (!res.perSide.length) {
-    resultHtml = `<div class="plate-note">${t().plateJustBar} (${fmtKg(base)} ${t().kg})</div>`;
-  } else {
-    const chips = res.perSide.map((kg) => `<span class="plate-chip">${fmtKg(kg)}</span>`).join("");
-    const summary = res.ok
-      ? `<div class="plate-ok">✓ ${t().plateExact}: ${fmtKg(res.loaded)} ${t().kg}</div>`
-      : `<div class="plate-note">≈ ${fmtKg(res.loaded)} ${t().kg} — ${t().plateClosest}</div>`;
-    const capNote = res.capped && isDumbbell
-      ? `<div class="plate-note">${t().plateDumbbellMax.replace("{n}", maxPerSide)}</div>` : "";
-    resultHtml = `
-      <div class="plate-side-label">${t().platePerSide}</div>
-      <div class="plate-chips">${chips}</div>
-      ${summary}
-      ${capNote}`;
+    return `<div class="plate-note">${t().plateJustBar} (${fmtKg(base)} ${t().kg})</div>`;
   }
+  const chips = res.perSide.map((kg) => `<span class="plate-chip">${fmtKg(kg)}</span>`).join("");
+  const summary = res.ok
+    ? `<div class="plate-ok">✓ ${t().plateExact}: ${fmtKg(res.loaded)} ${t().kg}</div>`
+    : `<div class="plate-note">≈ ${fmtKg(res.loaded)} ${t().kg} — ${t().plateClosest}</div>`;
+  const capNote = res.capped && isDumbbell
+    ? `<div class="plate-note">${t().plateDumbbellMax.replace("{n}", maxPerSide)}</div>` : "";
+  return `
+    <div class="plate-side-label">${t().platePerSide}</div>
+    <div class="plate-chips">${chips}</div>
+    ${summary}
+    ${capNote}`;
+}
+function renderPlateCalc() {
+  const eq = state.equipment;
+  const isDumbbell = plateCalc.mode !== "bar";
+  const share = isDumbbell && plateCalc.pair ? 2 : 1;
+  const base = isDumbbell ? Number(eq.dumbbellHandle) || 0 : Number(eq.bar) || 0;
+  const maxPerSide = isDumbbell ? 3 : Infinity;  // one dumbbell sleeve fits ~3 plates
+  const resultHtml = plateResultHtml();
+
   const combos = plateCombos(base, maxPerSide, share);
   const dir = plateCalc.sort === "desc" ? -1 : 1;
   const sortedCombos = [...combos].sort((a, b2) => dir * (a.total - b2.total) || a.perSide.length - b2.perSide.length);
@@ -1252,7 +1261,11 @@ function renderPlateCalc() {
     row.onclick = () => applyPlateWeight(row.dataset.combo)
   );
   const wInput = document.getElementById("plateWeight");
-  wInput.oninput = () => { plateCalc.weight = wInput.value === "" ? "" : num(wInput.value); renderPlateCalc(); };
+  wInput.oninput = () => {
+    plateCalc.weight = wInput.value === "" ? "" : num(wInput.value);
+    const resEl = document.querySelector(".plate-result");
+    if (resEl) resEl.innerHTML = plateResultHtml();  // update only the result; keep the input focused
+  };
   document.getElementById("openEquip").onclick = () => openEquipment();
 }
 
