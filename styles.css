@@ -336,6 +336,8 @@ body {
 .sort-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .combo-list { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow: auto; }
 .combo-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.combo-row.combo-tap { cursor: pointer; border-color: var(--primary); transition: background 0.12s ease, transform 0.08s ease; }
+.combo-row.combo-tap:active { background: var(--primary-soft); transform: scale(0.98); }
 .combo-plates { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; flex: 1; min-width: 0; }
 .combo-total { font-weight: 800; color: var(--text); white-space: nowrap; }
 .pdisc { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; font-weight: 800; font-size: 0.68rem; box-shadow: var(--shadow); flex-shrink: 0; background: #475569; border: 1.5px solid rgba(0, 0, 0, 0.18); }

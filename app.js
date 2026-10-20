@@ -787,11 +787,14 @@ function wireDetail(day, started) {
   };
   viewEl.querySelectorAll("[data-plate]").forEach((btn) =>
     btn.onclick = () => {
-      const arr = (state.active.log && state.active.log[btn.dataset.plate]) || [];
+      const exId = btn.dataset.plate;
+      const arr = (state.active.log && state.active.log[exId]) || [];
       // Use the set the user has reached: the first not-done set, else the last set.
-      const i = arr.findIndex((s) => !s.done);
-      const src = i === -1 ? arr[arr.length - 1] : arr[i];
-      openPlateCalc(src ? (src.weight || src.pw || "") : "", "dumbbell");
+      let i = arr.findIndex((s) => !s.done);
+      if (i === -1) i = arr.length - 1;
+      const src = arr[i];
+      // Pass the target set so tapping a combination fills its weight in.
+      openPlateCalc(src ? (src.weight || src.pw || "") : "", "dumbbell", i >= 0 ? { exId, setIdx: i } : null);
     }
   );
 }
@@ -1145,10 +1148,23 @@ function plateDisc(kg) {
   return `<span class="pdisc ${cls}" style="width:${d}px;height:${d}px">${fmtKg(kg)}</span>`;
 }
 
-let plateCalc = null;  // { weight, mode:"bar"|"dumbbell", pair:bool, sort:"asc"|"desc", legendOpen:bool }
-function openPlateCalc(weight, mode) {
-  plateCalc = { weight: weight != null && weight !== "" ? Number(weight) : "", mode: mode || "dumbbell", pair: false, sort: "asc", legendOpen: false };
+let plateCalc = null;  // { weight, mode:"bar"|"dumbbell", pair:bool, sort:"asc"|"desc", legendOpen:bool, target:{exId,setIdx}|null }
+function openPlateCalc(weight, mode, target) {
+  plateCalc = { weight: weight != null && weight !== "" ? Number(weight) : "", mode: mode || "dumbbell", pair: false, sort: "asc", legendOpen: !!target, target: target || null };
   renderPlateCalc();
+}
+
+// Tapping a combination writes its total into the reached set and jumps back to the workout.
+function applyPlateWeight(total) {
+  const tgt = plateCalc && plateCalc.target;
+  if (!tgt || !state.active || !state.active.log) return;
+  const arr = state.active.log[tgt.exId];
+  if (!arr || !arr[tgt.setIdx]) return;
+  arr[tgt.setIdx].weight = fmtKg(Number(total));
+  flushActiveSave();
+  closeModal();
+  render();
+  toast(t().plateFilled.replace("{w}", fmtKg(Number(total))));
 }
 function renderPlateCalc() {
   const eq = state.equipment;
@@ -1180,8 +1196,9 @@ function renderPlateCalc() {
   const combos = plateCombos(base, maxPerSide, share);
   const dir = plateCalc.sort === "desc" ? -1 : 1;
   const sortedCombos = [...combos].sort((a, b2) => dir * (a.total - b2.total) || a.perSide.length - b2.perSide.length);
+  const canFill = !!(plateCalc.target);
   const comboRows = sortedCombos.map((c) => `
-    <div class="combo-row">
+    <div class="combo-row${canFill ? " combo-tap" : ""}"${canFill ? ` data-combo="${c.total}"` : ""}>
       <span class="combo-plates">${c.perSide.map(plateDisc).join("")}</span>
       <span class="combo-total">${fmtKg(c.total)} ${t().kg}</span>
     </div>`).join("");
@@ -1193,7 +1210,7 @@ function renderPlateCalc() {
   const legend = `
     <details class="plate-legend" ${plateCalc.legendOpen ? "open" : ""}>
       <summary>📋 ${t().plateAllCombos}</summary>
-      <div class="combo-hint">${t().plateCombosHint}</div>
+      <div class="combo-hint">${canFill ? t().plateTapToFill : t().plateCombosHint}</div>
       ${sortBar}
       ${comboRows ? `<div class="combo-list">${comboRows}</div>`
                   : `<div class="plate-note">${t().plateCombosEmpty}</div>`}
@@ -1231,6 +1248,9 @@ function renderPlateCalc() {
   );
   const legendEl = document.querySelector(".plate-legend");
   if (legendEl) legendEl.ontoggle = () => { plateCalc.legendOpen = legendEl.open; };
+  document.querySelectorAll(".combo-row[data-combo]").forEach((row) =>
+    row.onclick = () => applyPlateWeight(row.dataset.combo)
+  );
   const wInput = document.getElementById("plateWeight");
   wInput.oninput = () => { plateCalc.weight = wInput.value === "" ? "" : num(wInput.value); renderPlateCalc(); };
   document.getElementById("openEquip").onclick = () => openEquipment();
